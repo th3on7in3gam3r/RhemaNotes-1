@@ -24,6 +24,7 @@
  */
 
 import { buildMetaHTML, buildSermonMeta, HOME_META, HISTORY_META } from '../services/seoService';
+import Stripe from 'stripe';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -38,6 +39,8 @@ interface Env {
   SERMONS_KV?: KVNamespace;
   /** D1 Database for history and search */
   DB?: D1Database;
+  /** Stripe Secret Key */
+  STRIPE_SECRET_KEY: string;
 }
 
 interface SermonKVEntry {
@@ -57,6 +60,10 @@ export default {
     // 1. Handle API Routes (Database)
     if (path.startsWith('/api/sermons')) {
       return handleSermonsAPI(request, env);
+    }
+
+    if (path === '/api/checkout' && request.method === 'POST') {
+      return handleCheckoutAPI(request, env);
     }
 
     // 2. Handle robots.txt & sitemap
@@ -157,6 +164,43 @@ async function handleSermonsAPI(request: Request, env: Env): Promise<Response> {
   }
 
   return new Response('Method not allowed', { status: 405 });
+}
+
+async function handleCheckoutAPI(request: Request, env: Env): Promise<Response> {
+  try {
+    const { priceId, userId, userEmail } = await request.json() as any;
+    
+    if (!env.STRIPE_SECRET_KEY) {
+      return new Response(JSON.stringify({ error: 'Stripe secret key not configured' }), { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const stripe = new Stripe(env.STRIPE_SECRET_KEY);
+    const url = new URL(request.url);
+    const origin = url.origin;
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [{ price: priceId, quantity: 1 }],
+      mode: 'subscription',
+      success_url: `${origin}/?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/pricing`,
+      client_reference_id: userId,
+      customer_email: userEmail,
+      metadata: { userId: userId },
+    });
+
+    return new Response(JSON.stringify({ url: session.url }), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  } catch (err: any) {
+    return new Response(JSON.stringify({ error: err.message }), { 
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
 }
 
 // ── Static Assets & Robots ───────────────────────────────────────────────────
