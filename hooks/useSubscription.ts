@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { UserTier, TIER_LIMITS, canUseFeature, FeatureLimits } from '../constants/features';
 import { useUser } from '@clerk/react';
 
