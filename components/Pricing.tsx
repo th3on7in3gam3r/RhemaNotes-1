@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 
 interface PricingProps {
   onGoHome: () => void;
-  onSelectPlan: (plan: string) => void;
+  onSelectPlan: (plan: string, cycle: 'monthly' | 'annual') => void;
 }
 
 export const Pricing: React.FC<PricingProps> = ({ onGoHome, onSelectPlan }) => {
@@ -158,7 +158,7 @@ export const Pricing: React.FC<PricingProps> = ({ onGoHome, onSelectPlan }) => {
             </div>
 
             <button 
-              onClick={() => onSelectPlan(plan.id)}
+              onClick={() => onSelectPlan(plan.id, billingCycle)}
               className={`
                 w-full py-4 rounded-2xl font-black transition-all active:scale-95 flex items-center justify-center space-x-2
                 ${plan.featured 

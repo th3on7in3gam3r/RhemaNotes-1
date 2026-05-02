@@ -101,21 +101,59 @@ export default {
 async function handleSermonsAPI(request: Request, env: Env): Promise<Response> {
   if (!env.DB) return new Response('Database not bound', { status: 500 });
 
+  const url = new URL(request.url);
+  // Extract optional sermon ID from path e.g. /api/sermons/abc-123
+  const sermonId = url.pathname.replace('/api/sermons', '').replace(/^\//, '') || null;
+
+  const cors = {
+    'Access-Control-Allow-Origin': '*',
+    'Content-Type': 'application/json',
+  };
+
   try {
-    if (request.method === 'GET') {
-      const { results } = await env.DB.prepare('SELECT * FROM sermons ORDER BY timestamp DESC').all();
-      return Response.json(results);
+    // GET /api/sermons — list all sermons
+    if (request.method === 'GET' && !sermonId) {
+      const { results } = await env.DB.prepare(
+        'SELECT id, title, main_topic, source_type, created_at FROM sermons ORDER BY created_at DESC LIMIT 100'
+      ).all();
+      return new Response(JSON.stringify(results), { headers: cors });
     }
-    
+
+    // POST /api/sermons — create a sermon
     if (request.method === 'POST') {
       const data: any = await request.json();
+      const id = data.id || crypto.randomUUID();
       await env.DB.prepare(
-        'INSERT INTO sermons (id, title, mainTopic, transcript, summary, audioUrl, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)'
-      ).bind(data.id, data.title, data.mainTopic, data.transcript, data.summary, data.audioUrl, Date.now()).run();
-      return Response.json({ success: true });
+        `INSERT INTO sermons (id, user_id, title, main_topic, clean_transcript, source_type, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+      ).bind(
+        id,
+        data.user_id || 'guest',
+        data.title || 'Untitled Sermon',
+        data.main_topic || '',
+        data.clean_transcript || '',
+        data.source_type || 'text'
+      ).run();
+      return new Response(JSON.stringify({ success: true, id }), { headers: cors });
     }
+
+    // DELETE /api/sermons/:id
+    if (request.method === 'DELETE' && sermonId) {
+      await env.DB.prepare('DELETE FROM sermons WHERE id = ?').bind(sermonId).run();
+      return new Response(JSON.stringify({ success: true }), { headers: cors });
+    }
+
+    // PATCH /api/sermons/:id
+    if (request.method === 'PATCH' && sermonId) {
+      const data: any = await request.json();
+      await env.DB.prepare(
+        `UPDATE sermons SET title = ?, main_topic = ?, clean_transcript = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+      ).bind(data.title, data.main_topic, data.clean_transcript, sermonId).run();
+      return new Response(JSON.stringify({ success: true }), { headers: cors });
+    }
+
   } catch (err: any) {
-    return new Response(err.message, { status: 500 });
+    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: cors });
   }
 
   return new Response('Method not allowed', { status: 405 });

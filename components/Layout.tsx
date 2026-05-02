@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { History, Home, BookOpen, Moon, Sun, Sparkles, MessageCircle, Heart } from 'lucide-react';
+import { Show, SignInButton, SignUpButton, UserButton } from '@clerk/react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -125,6 +126,25 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
             >
               {dark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
+
+            <div className="w-px h-5 bg-indigo-100 mx-2" />
+
+            {/* Clerk Auth */}
+            <Show when="signed-out">
+              <SignInButton mode="modal">
+                <button className="px-4 py-2 text-sm font-bold text-indigo-900/60 hover:text-indigo-900 hover:bg-indigo-50 rounded-xl transition-all">
+                  Sign In
+                </button>
+              </SignInButton>
+              <SignUpButton mode="modal">
+                <button className="ml-1 px-4 py-2 text-sm font-bold bg-indigo-900 text-amber-100 rounded-xl hover:bg-indigo-800 transition-all">
+                  Sign Up
+                </button>
+              </SignUpButton>
+            </Show>
+            <Show when="signed-in">
+              <UserButton />
+            </Show>
           </nav>
 
           {/* Mobile Theme Toggle only */}
@@ -187,6 +207,17 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
           </div>
           <p className="text-xs text-indigo-900/40 font-medium">
             Capture the spirit of every sermon. Built for your spiritual growth.
+          </p>
+          <p className="text-xs text-indigo-900/30 mt-3">
+            A product by{' '}
+            <a
+              href="https://biblefunland.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-indigo-900/50 hover:text-indigo-900 font-semibold underline underline-offset-2 transition-colors"
+            >
+              BibleFunLand.com
+            </a>
           </p>
         </div>
       </footer>

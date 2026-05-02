@@ -19,6 +19,7 @@ import {
   Cross, Waves
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useUser } from '@clerk/react';
 
 type AppScreen = 'home' | 'listening' | 'summary' | 'upload' | 'history' | 'youtube' | 'pricing';
 
@@ -160,6 +161,7 @@ function App() {
   
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const { user } = useUser();
 
   useEffect(() => {
     window.addEventListener('beforeinstallprompt', (e) => {
@@ -495,9 +497,48 @@ function App() {
         return (
           <Pricing 
             onGoHome={handleGoHome} 
-            onSelectPlan={(plan) => {
-              console.log('Selected plan:', plan);
-              // Checkout logic
+            onSelectPlan={async (planId, cycle) => {
+              // Map plan IDs to actual price IDs from env
+              let stripePriceId = '';
+              
+              if (planId === 'free') {
+                stripePriceId = import.meta.env.VITE_STRIPE_PRICE_FREE;
+              } else if (planId === 'pro') {
+                stripePriceId = cycle === 'annual' 
+                  ? import.meta.env.VITE_STRIPE_PRICE_PRO_ANNUAL 
+                  : import.meta.env.VITE_STRIPE_PRICE_PRO_MONTHLY;
+              } else if (planId === 'church') {
+                stripePriceId = import.meta.env.VITE_STRIPE_PRICE_CHURCH;
+              }
+
+              if (!stripePriceId) {
+                console.error('No Price ID found for plan:', planId);
+                return;
+              }
+
+              setIsLoading(true);
+              try {
+                const response = await fetch('/api/checkout', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    priceId: stripePriceId,
+                    userId: user?.id || 'guest',
+                    userEmail: user?.primaryEmailAddress?.emailAddress || '',
+                  }),
+                });
+
+                const { url } = await response.json() as any;
+                if (url) {
+                  window.location.href = url;
+                } else {
+                  throw new Error('Failed to create checkout session');
+                }
+              } catch (err: any) {
+                setError(err.message || 'Payment system currently unavailable. Please try again later.');
+              } finally {
+                setIsLoading(false);
+              }
             }} 
           />
         );
