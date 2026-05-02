@@ -56,7 +56,7 @@ export const Pricing: React.FC<PricingProps> = ({ onGoHome, onSelectPlan }) => {
         'Admin Insights Dashboard',
         'Priority Technical Support'
       ],
-      cta: 'Contact Us',
+      cta: 'Choose Harvest',
       accent: 'indigo'
     }
   ];
