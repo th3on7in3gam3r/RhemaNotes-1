@@ -209,12 +209,12 @@ function generateRobotsTxt(): string {
   return `User-agent: *
 Allow: /
 Disallow: /api/
-Sitemap: https://rhemanotes.jerlessm.workers.dev/sitemap.xml
+Sitemap: https://rhemanotes.biblefunland.com/sitemap.xml
 `;
 }
 
 async function generateSitemap(env: Env): Promise<string> {
-  const baseUrl = 'https://rhemanotes.jerlessm.workers.dev';
+  const baseUrl = 'https://rhemanotes.biblefunland.com';
   const staticRoutes = ['', '/history'];
   
   let sitemap = `<?xml version="1.0" encoding="UTF-8"?>
@@ -267,7 +267,7 @@ async function resolveMetaHTML(path: string, env: Env): Promise<string> {
       title: 'Sermon Note — RhemaNotes',
       description:
         'View this sermon note with scripture references, study tools and personal reflections on RhemaNotes.',
-      canonical: `https://rhemanotes.jerlessm.workers.dev/note/${id}`,
+      canonical: `https://rhemanotes.biblefunland.com/note/${id}`,
       ogType: 'article',
     });
   }

@@ -498,6 +498,11 @@ function App() {
           <Pricing 
             onGoHome={handleGoHome} 
             onSelectPlan={async (planId, cycle) => {
+              if (!user) {
+                alert('Please sign in to your account first to upgrade!');
+                // Optional: Trigger Clerk sign-in modal here if you want
+                return;
+              }
               // Map plan IDs to actual price IDs from env
               let stripePriceId = '';
               
@@ -528,11 +533,11 @@ function App() {
                   }),
                 });
 
-                const { url } = await response.json() as any;
-                if (url) {
-                  window.location.href = url;
+                const data = await response.json() as any;
+                if (data.url) {
+                  window.location.href = data.url;
                 } else {
-                  throw new Error('Failed to create checkout session');
+                  throw new Error(data.error || 'Failed to create checkout session');
                 }
               } catch (err: any) {
                 console.error('Checkout error:', err);

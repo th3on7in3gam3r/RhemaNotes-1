@@ -9,7 +9,7 @@
  *      the HTML response before serving (for crawlers that don't run JS)
  */
 
-const BASE_URL  = 'https://rhemanotes.jerlessm.workers.dev';
+const BASE_URL  = 'https://rhemanotes.biblefunland.com';
 const OG_IMAGE  = `${BASE_URL}/og-image.png`;
 const SITE_NAME = 'RhemaNotes';
 
