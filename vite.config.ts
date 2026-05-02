@@ -19,6 +19,11 @@ export default defineConfig(({ mode }) => {
                 proxyReq.setHeader('x-goog-api-key', env.GEMINI_API_KEY || '');
               });
             }
+          },
+          '/api': {
+            target: 'http://localhost:8888',
+            changeOrigin: true,
+            secure: false,
           }
         }
       },

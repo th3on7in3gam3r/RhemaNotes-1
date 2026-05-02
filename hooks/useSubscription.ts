@@ -1,9 +1,16 @@
-import { useState, useEffect } from 'react';
 import { UserTier, TIER_LIMITS, canUseFeature, FeatureLimits } from '../constants/features';
+import { useUser } from '@clerk/react';
 
 export const useSubscription = () => {
-  // In a real app, this would be fetched from your Auth provider or DB
+  const { user } = useUser();
   const [tier, setTier] = useState<UserTier>('free');
+
+  useEffect(() => {
+    // Override for user as requested
+    if (user?.primaryEmailAddress?.emailAddress === 'jerlessm@gmail.com') {
+      setTier('church');
+    }
+  }, [user]);
 
   const checkFeature = (feature: keyof FeatureLimits) => {
     return canUseFeature(tier, feature);
@@ -19,6 +26,6 @@ export const useSubscription = () => {
     isChurch: tier === 'church',
     checkFeature,
     getLimit,
-    setTier, // To simulate changes for now
+    setTier,
   };
 };

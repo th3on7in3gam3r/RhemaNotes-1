@@ -535,6 +535,8 @@ function App() {
                   throw new Error('Failed to create checkout session');
                 }
               } catch (err: any) {
+                console.error('Checkout error:', err);
+                alert('Checkout Error: ' + (err.message || 'Unknown error'));
                 setError(err.message || 'Payment system currently unavailable. Please try again later.');
               } finally {
                 setIsLoading(false);
