@@ -192,15 +192,24 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
         <nav className="bg-white/90 backdrop-blur-2xl border border-indigo-100/50 shadow-2xl rounded-[32px] p-4 flex items-center justify-around">
           {mobileNavBtn('home', 'Home', Home)}
           {mobileNavBtn('history', 'Library', History)}
-          <div className="relative -top-8">
+          {/* Center FAB — Start Scribing a Sermon */}
+          <div className="relative -top-8 flex flex-col items-center">
             <button 
-              onClick={() => onNavigate('home')}
+              onClick={() => onNavigate('new')}
               className="w-16 h-16 bg-indigo-950 rounded-3xl flex items-center justify-center shadow-xl shadow-indigo-200 border-2 border-amber-200/20 active:scale-95 transition-all"
             >
                <BookOpen className="w-7 h-7 text-amber-200" />
             </button>
+            <span className="text-[9px] font-black uppercase tracking-tighter text-indigo-900/40 mt-1">Scribe</span>
           </div>
-          {mobileNavBtn('pricing', 'Growth', Sparkles)}
+          {tier === 'free' ? mobileNavBtn('pricing', 'Upgrade', Sparkles) : (
+            <button onClick={() => onNavigate('pricing')} className="flex flex-col items-center justify-center space-y-1">
+              <div className="p-2 rounded-xl text-amber-500">
+                <Crown className="w-5 h-5" />
+              </div>
+              <span className="text-[10px] font-black uppercase tracking-tighter text-amber-500">Plan</span>
+            </button>
+          )}
           {mobileNavBtn('summary', 'Prayer', Heart)}
         </nav>
       </div>
