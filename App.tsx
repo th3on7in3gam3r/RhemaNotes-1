@@ -179,7 +179,7 @@ function App() {
     if (outcome === 'accepted') setDeferredPrompt(null);
   };
 
-  const { tier, isPro } = useSubscription();
+  const { tier, isPro, isLoadingTier } = useSubscription();
 
   useEffect(() => { 
     getSermonHistory().then(setHistory); 
@@ -561,7 +561,7 @@ function App() {
         );
 
       case 'success':
-        return <PaymentSuccess onGoHome={handleGoHome} tier={subscription.tier === 'free' ? 'pro' : subscription.tier} />;
+        return <PaymentSuccess onGoHome={handleGoHome} tier={tier === 'free' ? 'pro' : tier} />;
 
       case 'terms':
         return <TermsOfService onBack={handleGoHome} />;
@@ -575,7 +575,7 @@ function App() {
   };
 
   return (
-    <Layout onNavigate={handleNavigate} currentScreen={currentScreen} tier={subscription.tier}>
+    <Layout onNavigate={handleNavigate} currentScreen={currentScreen} tier={tier}>
       {renderScreen()}
 
       <AnimatePresence>
