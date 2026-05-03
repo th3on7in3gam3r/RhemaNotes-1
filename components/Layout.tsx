@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { History, Home, BookOpen, Moon, Sun, Sparkles, MessageCircle, Heart } from 'lucide-react';
+import { History, Home, BookOpen, Moon, Sun, Sparkles, MessageCircle, Heart, Crown } from 'lucide-react';
 import { Show, SignInButton, SignUpButton, UserButton } from '@clerk/react';
 
 interface LayoutProps {
   children: React.ReactNode;
   onNavigate: (screen: any) => void;
   currentScreen: string;
+  tier?: 'free' | 'pro' | 'church';
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScreen }) => {
+export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScreen, tier = 'free' }) => {
   const [dark, setDark] = useState(() =>
     typeof window !== 'undefined'
       ? document.documentElement.classList.contains('dark')
@@ -115,7 +116,26 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
           <nav className="hidden md:flex items-center bg-white/50 p-1.5 rounded-[20px] border border-indigo-50/50 shadow-sm">
             {navBtn('home',    'Home',    Home)}
             {navBtn('history', 'Library', History)}
-            {navBtn('pricing', 'Upgrade', Sparkles)}
+            {/* Show Upgrade only for free users; pro/church get a tier badge */}
+            {tier === 'free' && navBtn('pricing', 'Upgrade', Sparkles)}
+            {tier === 'pro' && (
+              <button
+                onClick={() => onNavigate('pricing')}
+                className="relative flex items-center space-x-2 px-4 py-2 rounded-2xl text-sm font-bold bg-indigo-900 text-amber-200 shadow-sm"
+              >
+                <Sparkles className="w-4 h-4 text-amber-400" />
+                <span className="hidden lg:inline">The Vine ✓</span>
+              </button>
+            )}
+            {tier === 'church' && (
+              <button
+                onClick={() => onNavigate('pricing')}
+                className="relative flex items-center space-x-2 px-4 py-2 rounded-2xl text-sm font-bold bg-amber-400 text-amber-950 shadow-sm"
+              >
+                <Crown className="w-4 h-4" />
+                <span className="hidden lg:inline">The Harvest ✓</span>
+              </button>
+            )}
 
             <div className="w-px h-5 bg-indigo-100 mx-2" />
 

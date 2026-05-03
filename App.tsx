@@ -556,7 +556,7 @@ function App() {
   };
 
   return (
-    <Layout onNavigate={handleNavigate} currentScreen={currentScreen}>
+    <Layout onNavigate={handleNavigate} currentScreen={currentScreen} tier={subscription.tier}>
       {renderScreen()}
 
       <AnimatePresence>
