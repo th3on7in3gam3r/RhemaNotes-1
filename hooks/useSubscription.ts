@@ -1,17 +1,48 @@
 import { useState, useEffect } from 'react';
-import { UserTier, TIER_LIMITS, canUseFeature, FeatureLimits } from '../constants/features';
 import { useUser } from '@clerk/react';
+import { UserTier, TIER_LIMITS, canUseFeature, FeatureLimits } from '../constants/features';
 
 export const useSubscription = () => {
-  const { user } = useUser();
+  const { user, isLoaded } = useUser();
   const [tier, setTier] = useState<UserTier>('free');
+  const [isLoadingTier, setIsLoadingTier] = useState(true);
 
   useEffect(() => {
-    // Override for user as requested
+    if (!isLoaded) return;
+
+    // Admin override
     if (user?.primaryEmailAddress?.emailAddress === 'jerlessm@gmail.com') {
       setTier('church');
+      setIsLoadingTier(false);
+      return;
     }
-  }, [user]);
+
+    if (!user) {
+      setTier('free');
+      setIsLoadingTier(false);
+      return;
+    }
+
+    // Fetch real tier from DB
+    const fetchTier = async () => {
+      try {
+        const res = await fetch(`/api/user?userId=${user.id}`);
+        if (res.ok) {
+          const data = await res.json() as { tier: string };
+          if (data.tier === 'pro' || data.tier === 'church' || data.tier === 'free') {
+            setTier(data.tier as UserTier);
+          }
+        }
+      } catch {
+        // fallback to free on error
+        setTier('free');
+      } finally {
+        setIsLoadingTier(false);
+      }
+    };
+
+    fetchTier();
+  }, [user, isLoaded]);
 
   const checkFeature = (feature: keyof FeatureLimits) => {
     return canUseFeature(tier, feature);
@@ -25,6 +56,7 @@ export const useSubscription = () => {
     tier,
     isPro: tier === 'pro' || tier === 'church',
     isChurch: tier === 'church',
+    isLoadingTier,
     checkFeature,
     getLimit,
     setTier,

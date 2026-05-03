@@ -248,6 +248,21 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
               BibleFunLand.com
             </a>
           </p>
+          <div className="flex items-center justify-center space-x-4 mt-4">
+            <button
+              onClick={() => onNavigate('terms')}
+              className="text-xs text-indigo-900/30 hover:text-indigo-900/60 underline underline-offset-2 transition-colors"
+            >
+              Terms of Service
+            </button>
+            <span className="text-indigo-900/20">·</span>
+            <button
+              onClick={() => onNavigate('privacy')}
+              className="text-xs text-indigo-900/30 hover:text-indigo-900/60 underline underline-offset-2 transition-colors"
+            >
+              Privacy Policy
+            </button>
+          </div>
         </div>
       </footer>
     </div>

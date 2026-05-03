@@ -5,6 +5,8 @@ import { AudioRecorder } from './components/AudioRecorder';
 import { SermonSummary } from './components/SermonSummary';
 import { SermonHistory } from './components/SermonHistory';
 import { Pricing } from './components/Pricing';
+import { PaymentSuccess } from './components/PaymentSuccess';
+import { TermsOfService, PrivacyPolicy } from './components/LegalPages';
 import { useSubscription } from './hooks/useSubscription';
 import { Onboarding } from './components/Onboarding';
 import { processSermonTranscript, processSermonFile, processSermonYoutubeUrl } from './services/geminiService';
@@ -21,7 +23,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { useUser } from '@clerk/react';
 
-type AppScreen = 'home' | 'listening' | 'summary' | 'upload' | 'history' | 'youtube' | 'pricing';
+type AppScreen = 'home' | 'listening' | 'summary' | 'upload' | 'history' | 'youtube' | 'pricing' | 'success' | 'terms' | 'privacy';
 
 // ── Processing overlay ────────────────────────────────────────────────────────
 
@@ -185,6 +187,14 @@ function App() {
     // Check if first time user
     const hasOnboarded = localStorage.getItem('rhemanotes_onboarded');
     if (!hasOnboarded) setShowOnboarding(true);
+
+    // Detect Stripe success redirect
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('session_id')) {
+      setCurrentScreen('success');
+      // Clean URL without reloading
+      window.history.replaceState({}, '', window.location.pathname);
+    }
   }, []);
 
   const handleOnboardingComplete = () => {
@@ -549,6 +559,15 @@ function App() {
             }} 
           />
         );
+
+      case 'success':
+        return <PaymentSuccess onGoHome={handleGoHome} tier={subscription.tier === 'free' ? 'pro' : subscription.tier} />;
+
+      case 'terms':
+        return <TermsOfService onBack={handleGoHome} />;
+
+      case 'privacy':
+        return <PrivacyPolicy onBack={handleGoHome} />;
 
       default:
         return null;

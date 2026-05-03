@@ -41,6 +41,10 @@ interface Env {
   DB?: D1Database;
   /** Stripe Secret Key */
   STRIPE_SECRET_KEY: string;
+  /** Stripe Webhook Signing Secret */
+  STRIPE_WEBHOOK_SECRET: string;
+  /** Clerk Secret Key */
+  CLERK_SECRET_KEY: string;
 }
 
 interface SermonKVEntry {
@@ -64,6 +68,14 @@ export default {
 
     if (path === '/api/checkout' && request.method === 'POST') {
       return handleCheckoutAPI(request, env);
+    }
+
+    if (path === '/api/webhook' && request.method === 'POST') {
+      return handleWebhookAPI(request, env);
+    }
+
+    if (path === '/api/user' && request.method === 'GET') {
+      return handleUserAPI(request, env);
     }
 
     // 2. Handle robots.txt & sitemap
@@ -200,6 +212,112 @@ async function handleCheckoutAPI(request: Request, env: Env): Promise<Response> 
       status: 500,
       headers: { 'Content-Type': 'application/json' }
     });
+  }
+}
+
+// ── Stripe Webhook Handler ────────────────────────────────────────────────────
+
+async function handleWebhookAPI(request: Request, env: Env): Promise<Response> {
+  const sig = request.headers.get('stripe-signature');
+  if (!sig || !env.STRIPE_WEBHOOK_SECRET) {
+    return new Response('Missing signature', { status: 400 });
+  }
+
+  let body: string;
+  try {
+    body = await request.text();
+  } catch {
+    return new Response('Cannot read body', { status: 400 });
+  }
+
+  // Verify Stripe signature using Web Crypto
+  let event: any;
+  try {
+    event = await verifyStripeWebhook(body, sig, env.STRIPE_WEBHOOK_SECRET);
+  } catch (err: any) {
+    return new Response(`Webhook signature invalid: ${err.message}`, { status: 400 });
+  }
+
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object;
+    const userId = session.client_reference_id || session.metadata?.userId;
+    const customerEmail = session.customer_email || session.customer_details?.email;
+    const stripeCustomerId = session.customer;
+    const stripeSubscriptionId = session.subscription;
+
+    // Map price ID to tier
+    const lineItems = session.display_items || [];
+    const priceId = session.line_items?.data?.[0]?.price?.id || '';
+    let tier = 'pro'; // default to pro
+    if (priceId === 'price_1TSmOfDaUBBsjt5mjrJLVLLK') tier = 'church';
+    else if (priceId === 'price_1TSmM0DaUBBsjt5mlh09smbe') tier = 'free';
+
+    if (env.DB && userId) {
+      try {
+        // Upsert user with new tier
+        await env.DB.prepare(`
+          INSERT INTO users (id, email, tier, stripe_customer_id, stripe_subscription_id, updated_at)
+          VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+          ON CONFLICT(id) DO UPDATE SET
+            tier = excluded.tier,
+            stripe_customer_id = excluded.stripe_customer_id,
+            stripe_subscription_id = excluded.stripe_subscription_id,
+            updated_at = CURRENT_TIMESTAMP
+        `).bind(userId, customerEmail || '', tier, stripeCustomerId || '', stripeSubscriptionId || '').run();
+      } catch (dbErr: any) {
+        console.error('DB upsert error:', dbErr.message);
+      }
+    }
+  }
+
+  return new Response(JSON.stringify({ received: true }), {
+    headers: { 'Content-Type': 'application/json' }
+  });
+}
+
+// Verify Stripe webhook signature using Web Crypto API (Edge compatible)
+async function verifyStripeWebhook(body: string, signature: string, secret: string): Promise<any> {
+  const parts = signature.split(',').reduce((acc: any, part) => {
+    const [key, val] = part.split('=');
+    acc[key] = val;
+    return acc;
+  }, {});
+
+  const timestamp = parts['t'];
+  const sig = parts['v1'];
+  if (!timestamp || !sig) throw new Error('Invalid signature format');
+
+  const signed = `${timestamp}.${body}`;
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  );
+  const mac = await crypto.subtle.sign('HMAC', key, encoder.encode(signed));
+  const expected = Array.from(new Uint8Array(mac)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+  if (expected !== sig) throw new Error('Signature mismatch');
+  return JSON.parse(body);
+}
+
+// ── User Tier API ─────────────────────────────────────────────────────────────
+
+async function handleUserAPI(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const userId = url.searchParams.get('userId');
+  const cors = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' };
+
+  if (!userId || !env.DB) {
+    return new Response(JSON.stringify({ tier: 'free' }), { headers: cors });
+  }
+
+  try {
+    const result = await env.DB.prepare(
+      'SELECT tier FROM users WHERE id = ?'
+    ).bind(userId).first<{ tier: string }>();
+    
+    return new Response(JSON.stringify({ tier: result?.tier || 'free' }), { headers: cors });
+  } catch {
+    return new Response(JSON.stringify({ tier: 'free' }), { headers: cors });
   }
 }
 
