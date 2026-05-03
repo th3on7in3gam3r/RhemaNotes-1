@@ -71,9 +71,8 @@ export default {
     if (path === '/sitemap.xml') return new Response(await generateSitemap(env), { headers: { 'content-type': 'application/xml' } });
 
     // 3. Serve static assets (JS, CSS, Images, Icons)
-    // If the request is for a file that exists in the build, serve it directly
     try {
-      const asset = await env.ASSETS.fetch(request);
+      const asset = await env.ASSETS.fetch(request.clone());
       if (asset.ok || isAssetRequest(path)) {
         return asset;
       }
@@ -82,7 +81,8 @@ export default {
     }
 
     // 4. Fetch the base index.html for SPA routing + SEO injection
-    const assetResponse = await env.ASSETS.fetch(new Request(`${url.origin}/index.html`));
+    const indexUrl = new URL('/index.html', url.origin);
+    const assetResponse = await env.ASSETS.fetch(new Request(indexUrl.toString()));
     if (!assetResponse.ok) return assetResponse;
 
     const metaHTML = await resolveMetaHTML(path, env);
