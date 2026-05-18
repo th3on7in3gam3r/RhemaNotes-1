@@ -31,7 +31,7 @@ export const SermonHistory: React.FC<SermonHistoryProps> = ({
               <Waves className="w-6 h-6 text-amber-200" />
            </div>
            <div>
-             <h2 className="text-4xl font-serif font-black text-indigo-950 tracking-tight">Your Library</h2>
+             <h2 className="text-4xl font-serif font-black text-indigo-950 tracking-tight">User Dashboard</h2>
              <p className="text-indigo-900/40 font-serif italic">Review your spiritual journey</p>
            </div>
         </div>

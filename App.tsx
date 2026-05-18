@@ -395,7 +395,7 @@ function App() {
                     onClick={() => setCurrentScreen('history')}
                     className="btn-sacred-ghost"
                   >
-                    <span>View Library</span>
+                    <span>View Dashboard</span>
                     <ArrowRight className="w-4 h-4" />
                   </button>
 

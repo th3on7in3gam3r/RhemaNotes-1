@@ -120,7 +120,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
           {/* Desktop Nav */}
           <nav className="hidden md:flex items-center bg-white/50 p-1.5 rounded-[20px] border border-indigo-50/50 shadow-sm">
             {navBtn('home',    'Home',    Home)}
-            {navBtn('history', 'Library', History)}
+            {navBtn('history', 'Dashboard', History)}
             {/* Show Upgrade only for free users; pro/church get a tier badge */}
             {tier === 'free' && navBtn('pricing', 'Upgrade', Sparkles)}
             {tier === 'pro' && (
@@ -208,7 +208,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
       <div className="md:hidden fixed bottom-4 left-4 right-4 z-[60]">
         <nav className="bg-white/95 backdrop-blur-2xl border border-indigo-50 shadow-xl rounded-2xl py-1.5 px-3 flex items-center justify-around">
           {mobileNavBtn('home', 'Home', Home)}
-          {mobileNavBtn('history', 'Library', History)}
+          {mobileNavBtn('history', 'Dashboard', History)}
           {/* Center FAB — Start Scribing a Sermon (Opens live recording) */}
           <div className="relative -top-4 flex flex-col items-center">
             <button 
