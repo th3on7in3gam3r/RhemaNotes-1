@@ -301,14 +301,25 @@ function App() {
           <div className="flex flex-col items-center space-y-24 py-12 animate-in fade-in duration-700">
             {/* Hero */}
             <div className="flex flex-col items-center text-center space-y-8 max-w-3xl">
-              {/* Glowing Hero Logo Container */}
-              <div className="relative group mb-2">
-                <div className="absolute inset-0 rounded-[2.5rem] bg-gradient-to-tr from-indigo-500/20 to-amber-500/20 blur-2xl group-hover:scale-110 transition-transform duration-500 opacity-80" />
-                <img 
-                  src={logoImg} 
-                  alt="RhemaNotes Logo" 
-                  className="relative w-28 h-28 rounded-[2.5rem] shadow-2xl border border-indigo-50 group-hover:scale-105 transition-transform duration-300 z-10"
-                />
+              {/* Premium Hero Logo Showcase */}
+              <div className="relative group mb-4">
+                {/* Ambient multi-layered glowing backdrops */}
+                <div className="absolute -inset-4 rounded-[3.5rem] bg-gradient-to-r from-indigo-500/20 via-rose-500/10 to-amber-500/20 blur-3xl opacity-80 animate-pulse duration-[8000ms] pointer-events-none" />
+                <div className="absolute inset-0 rounded-[3rem] bg-gradient-to-tr from-indigo-500/30 to-amber-400/20 blur-xl opacity-60 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
+                
+                {/* Sleek spinning orbital gradient ring */}
+                <div className="absolute -inset-1.5 rounded-[3rem] bg-gradient-to-r from-indigo-500/40 via-amber-400/50 to-rose-500/40 opacity-70 blur-[1px] group-hover:animate-spin duration-15000 pointer-events-none" />
+
+                {/* Floating logo card with a dark bezel glass container */}
+                <div className="relative p-2.5 rounded-[2.8rem] bg-white/40 dark:bg-indigo-950/40 backdrop-blur-md border border-white/80 dark:border-indigo-900/50 shadow-2xl transform transition-all duration-500 hover:scale-[1.04] hover:-translate-y-1 z-10">
+                  <div className="relative rounded-[2.2rem] overflow-hidden bg-indigo-950 p-1 border border-indigo-900/10 shadow-inner flex items-center justify-center">
+                    <img 
+                      src={logoImg} 
+                      alt="RhemaNotes Logo" 
+                      className="w-24 h-24 rounded-[2rem] transform transition-transform duration-700 hover:scale-110"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="inline-flex items-center space-x-2 bg-white px-4 py-2 rounded-full shadow-sm border border-indigo-50">
