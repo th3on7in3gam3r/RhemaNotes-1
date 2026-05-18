@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { SermonSummaryOutput } from '../types';
+import { SermonSummaryOutput, MindMapNode } from '../types';
 import { Quiz } from './Quiz';
 import { Flashcards } from './Flashcards';
 import { MindMap } from './MindMap';
@@ -21,6 +21,50 @@ const TOOLS: { id: StudyTool; label: string; icon: React.ElementType; accent: st
   { id: 'chat',       label: 'Chat',       icon: MessageSquare, accent: 'emerald',activeBg: 'bg-emerald-50 dark:bg-emerald-950/60',activeBorder: 'border-emerald-500',activeText: 'text-emerald-900 dark:text-emerald-200',activeIcon: 'bg-emerald-600 text-white' },
 ];
 
+function buildDynamicMindMap(summary: SermonSummaryOutput): MindMapNode {
+  const rootNode: MindMapNode = {
+    id: 'root',
+    label: summary.main_topic || summary.title || 'Sermon',
+    type: 'root',
+    children: []
+  };
+
+  if (summary.key_points && summary.key_points.length > 0) {
+    rootNode.children = summary.key_points.map((point, index) => {
+      const mainNode: MindMapNode = {
+        id: `main-${index}`,
+        label: point,
+        type: 'main',
+        children: []
+      };
+
+      // Add a practical application if available
+      const app = summary.applications?.[index];
+      if (app) {
+        mainNode.children?.push({
+          id: `sub-app-${index}`,
+          label: app,
+          type: 'sub'
+        });
+      }
+
+      // Add a scripture reference if available
+      const scripture = summary.scriptures?.[index];
+      if (scripture) {
+        mainNode.children?.push({
+          id: `sub-scripture-${index}`,
+          label: scripture.reference,
+          type: 'sub'
+        });
+      }
+
+      return mainNode;
+    });
+  }
+
+  return rootNode;
+}
+
 export const StudySystem: React.FC<StudySystemProps> = ({ summary, onUpdateSummary }) => {
   const [activeTool, setActiveTool] = useState<StudyTool>('quiz');
 
@@ -28,7 +72,10 @@ export const StudySystem: React.FC<StudySystemProps> = ({ summary, onUpdateSumma
     switch (activeTool) {
       case 'quiz':       return summary.quiz?.length       ? <Quiz questions={summary.quiz} />         : <NoData tool="Quiz" />;
       case 'flashcards': return summary.flashcards?.length ? <Flashcards cards={summary.flashcards} /> : <NoData tool="Flashcards" />;
-      case 'mindmap':    return summary.mind_map   ? <MindMap data={summary.mind_map} />       : <NoData tool="Mind Map" />;
+      case 'mindmap':    {
+        const mindMapData = summary.mind_map || buildDynamicMindMap(summary);
+        return mindMapData.children?.length ? <MindMap data={mindMapData} /> : <NoData tool="Mind Map" />;
+      }
       case 'chat':       return <SermonChat summary={summary} onUpdateSummary={onUpdateSummary} />;
       default:           return null;
     }

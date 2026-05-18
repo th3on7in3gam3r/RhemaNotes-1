@@ -68,9 +68,55 @@ const SERMON_SCHEMA = {
         },
         required: ["front", "back"]
       }
+    },
+    mind_map: {
+      type: Type.OBJECT,
+      properties: {
+        id: { type: Type.STRING },
+        label: { type: Type.STRING },
+        type: { type: Type.STRING },
+        children: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING },
+              label: { type: Type.STRING },
+              type: { type: Type.STRING },
+              children: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    id: { type: Type.STRING },
+                    label: { type: Type.STRING },
+                    type: { type: Type.STRING }
+                  },
+                  required: ["id", "label", "type"]
+                }
+              }
+            },
+            required: ["id", "label", "type"]
+          }
+        }
+      },
+      required: ["id", "label", "type"]
     }
   },
-  required: ["title", "main_topic", "clean_transcript", "scriptures", "key_points"]
+  required: [
+    "title", 
+    "main_topic", 
+    "clean_transcript", 
+    "scriptures", 
+    "key_points", 
+    "quotes", 
+    "applications", 
+    "open_questions", 
+    "actionable_insights", 
+    "quiz", 
+    "flashcards", 
+    "mind_map"
+  ]
 };
 
 // ── Service Functions ─────────────────────────────────────────────────────────
@@ -135,6 +181,7 @@ async function callGemini(parts: any[], includeReflection: boolean): Promise<Ser
     parsedData.personal_action_items = parsedData.personal_action_items || [];
     parsedData.quiz = parsedData.quiz || [];
     parsedData.flashcards = parsedData.flashcards || [];
+    parsedData.mind_map = parsedData.mind_map || undefined;
 
     if (!includeReflection) {
       parsedData.reflection = {};
