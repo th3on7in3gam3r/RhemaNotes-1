@@ -121,26 +121,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
           <nav className="hidden md:flex items-center bg-white/50 p-1.5 rounded-[20px] border border-indigo-50/50 shadow-sm">
             {navBtn('home',    'Home',    Home)}
             {navBtn('history', 'Library', History)}
-            {/* Show Upgrade only for free users; pro/church get a tier badge */}
+            {/* Show Upgrade only for free users; paid users see their tier in Dashboard */}
             {tier === 'free' && navBtn('pricing', 'Upgrade', Sparkles)}
-            {tier === 'pro' && (
-              <button
-                onClick={() => onNavigate('pricing')}
-                className="relative flex items-center space-x-2 px-4 py-2 rounded-2xl text-sm font-bold bg-indigo-900 text-amber-200 shadow-sm"
-              >
-                <Sparkles className="w-4 h-4 text-amber-400" />
-                <span className="hidden lg:inline">The Vine ✓</span>
-              </button>
-            )}
-            {tier === 'church' && (
-              <button
-                onClick={() => onNavigate('pricing')}
-                className="relative flex items-center space-x-2 px-4 py-2 rounded-2xl text-sm font-bold bg-amber-400 text-amber-950 shadow-sm"
-              >
-                <Crown className="w-4 h-4" />
-                <span className="hidden lg:inline">The Harvest ✓</span>
-              </button>
-            )}
 
             <div className="w-px h-5 bg-indigo-100 mx-2" />
 
@@ -231,14 +213,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
             </button>
             <span className="text-[9.5px] font-black uppercase tracking-widest text-indigo-950 mt-1">Scribe</span>
           </div>
-          {tier === 'free' ? mobileNavBtn('pricing', 'Upgrade', Sparkles) : (
-            <button onClick={() => onNavigate('pricing')} className="flex flex-col items-center justify-center space-y-0.5 group active:scale-95 transition-transform">
-              <div className="p-1.5 rounded-full text-amber-500 transition-transform duration-300 group-hover:scale-105">
-                <Crown className="w-5 h-5 animate-pulse" />
-              </div>
-              <span className="text-[8.5px] font-bold uppercase tracking-tight text-amber-500">Plan</span>
-            </button>
-          )}
+          {tier === 'free' && mobileNavBtn('pricing', 'Upgrade', Sparkles)}
           {mobileNavBtn('profile', 'Dashboard', User)}
         </nav>
       </div>
