@@ -91,7 +91,7 @@ export default {
     }
 
     try {
-      const asset = await env.ASSETS.fetch(request.clone());
+      const asset = await env.ASSETS.fetch(request.clone() as any);
       if (asset.ok || isAssetRequest(path)) {
         return asset;
       }
