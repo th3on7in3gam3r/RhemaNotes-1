@@ -213,6 +213,14 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
             </button>
             <span className="text-[9.5px] font-black uppercase tracking-widest text-indigo-950 mt-1">Scribe</span>
           </div>
+          {tier === 'free' ? mobileNavBtn('pricing', 'Upgrade', Sparkles) : (
+            <button onClick={() => onNavigate('pricing')} className="flex flex-col items-center justify-center space-y-0.5 group active:scale-95 transition-transform">
+              <div className="p-1.5 rounded-full text-amber-500 transition-transform duration-300 group-hover:scale-105">
+                <Crown className="w-5 h-5 animate-pulse" />
+              </div>
+              <span className="text-[8.5px] font-bold uppercase tracking-tight text-amber-500">Plan</span>
+            </button>
+          )}
           {mobileNavBtn('profile', 'Dashboard', User)}
         </nav>
       </div>
