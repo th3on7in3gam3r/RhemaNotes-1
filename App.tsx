@@ -262,7 +262,16 @@ function App() {
   }, [user]);
 
   const handleDeleteItem = async (id: string) => {
-    await deleteSermonFromHistory(id, user?.id || 'guest');
+    // ── Creator-only guard ────────────────────────────────────────────────────
+    const activeUserId = user?.id || 'guest';
+    const target = history.find(i => i.id === id);
+    // Block deletion if the item exists and its owner doesn't match the active user
+    if (target?.user_id && target.user_id !== activeUserId) {
+      alert('Only the creator of this sermon record is allowed to delete it.');
+      return;
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+    await deleteSermonFromHistory(id, activeUserId);
     setHistory(prev => prev.filter(i => i.id !== id));
     if (selectedHistoryId === id) {
       setCurrentScreen('history');

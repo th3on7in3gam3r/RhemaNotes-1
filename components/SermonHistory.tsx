@@ -105,14 +105,14 @@ export const SermonHistory: React.FC<SermonHistoryProps> = ({
               </div>
 
               <div className="flex items-center space-x-3 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                {(!item.user_id || !activeUserId || item.user_id === activeUserId) && (
+                {(activeUserId && item.user_id && item.user_id === activeUserId) && (
                   <button
                     onClick={e => {
                       e.stopPropagation();
-                      if (confirm('Are you sure you want to remove this sermon study guide from your library? (This will not delete or affect any actual scriptures or Bible verses.)')) onDeleteItem(item.id);
+                      if (confirm('Remove this sermon study guide from your library? Your Bible scriptures are never affected.')) onDeleteItem(item.id);
                     }}
                     className="p-3 text-indigo-200 hover:text-rose-600 hover:bg-rose-50 transition-all rounded-xl"
-                    title="Remove sermon summary from library"
+                    title="Remove my sermon from library"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>

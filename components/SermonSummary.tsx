@@ -41,7 +41,10 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const { isPro } = useSubscription();
 
-  const isCreator = !creatorId || !activeUserId || activeUserId === creatorId;
+  // Strict positive match — both IDs must be present and equal.
+  // Old records with no stored creatorId are treated as read-only for everyone
+  // until the actual owner opens and re-saves them.
+  const isCreator = !!(activeUserId && creatorId && activeUserId === creatorId);
 
   const [journalText, setJournalText] = useState(summary.reflection?.reflection_text || '');
   const [guidedPrompts, setGuidedPrompts] = useState<string[]>([]);
@@ -89,10 +92,11 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
   const handleUpdateSummarization = useCallback(async (updated: SermonSummaryOutput) => {
     setCurrentSummary(updated);
     if (historyId) {
-      await updateSermonInHistory(historyId, updated);
+      // Pass activeUserId so the backend can enforce creator-only writes
+      await updateSermonInHistory(historyId, updated, activeUserId || 'guest');
       onUpdateHistory?.();
     }
-  }, [historyId, onUpdateHistory]);
+  }, [historyId, onUpdateHistory, activeUserId]);
 
   const handleToggleLike = useCallback(async () => {
     if (!isCreator) {
