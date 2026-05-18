@@ -319,6 +319,61 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
             <p className="text-indigo-900/40 font-serif italic mb-6 leading-relaxed">
               Use this space to record how the Spirit is speaking to you through this message.
             </p>
+
+            {/* AI Deep Spiritual Insights Card / Loader */}
+            {reflectionBusy && (
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="p-6 bg-gradient-to-br from-amber-50/60 to-orange-50/30 dark:from-slate-800/60 dark:to-slate-900/40 border border-amber-100/50 dark:border-slate-800 rounded-3xl text-center space-y-3"
+              >
+                <RefreshCw className="w-6 h-6 text-amber-500 animate-spin mx-auto" />
+                <h4 className="font-serif font-black text-indigo-950 dark:text-white">Illuminating Deep Reflection...</h4>
+                <p className="text-xs text-indigo-900/40 dark:text-slate-400 max-w-sm mx-auto leading-relaxed">
+                  Engaging scripture alignment, historical context, and generating a custom guided prayer to enrich your heart.
+                </p>
+              </motion.div>
+            )}
+
+            {!reflectionBusy && includeReflection && (currentSummary.reflection?.takeaway || currentSummary.reflection?.reflection_text || currentSummary.reflection?.prayer) && (
+              <motion.div 
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-6 md:p-8 bg-gradient-to-br from-amber-50/50 to-orange-50/20 dark:from-slate-800/40 dark:to-slate-900/20 border border-amber-100/40 dark:border-slate-800 rounded-[32px] space-y-6 text-left"
+              >
+                <div className="flex items-center space-x-2.5">
+                  <Sparkles className="w-5 h-5 text-amber-500 animate-pulse" />
+                  <h4 className="text-sm font-black uppercase tracking-wider text-amber-700 dark:text-amber-400">AI Deep Spiritual Insights</h4>
+                </div>
+
+                {currentSummary.reflection.takeaway && (
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Core Devotional Takeaway</p>
+                    <p className="font-serif italic text-base text-indigo-950 dark:text-slate-200 leading-relaxed">
+                      "{currentSummary.reflection.takeaway}"
+                    </p>
+                  </div>
+                )}
+
+                {currentSummary.reflection.reflection_text && (
+                  <div className="space-y-1 pt-2 border-t border-amber-100/40 dark:border-slate-800">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Deep Theological Context</p>
+                    <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed font-serif">
+                      {currentSummary.reflection.reflection_text}
+                    </p>
+                  </div>
+                )}
+
+                {currentSummary.reflection.prayer && (
+                  <div className="space-y-1 pt-2 border-t border-amber-100/40 dark:border-slate-800">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Guided Prayer Response</p>
+                    <p className="font-serif italic text-sm text-indigo-950/70 dark:text-slate-300 leading-relaxed bg-amber-50/30 dark:bg-slate-800/30 p-4 rounded-2xl border border-amber-100/30 dark:border-slate-800/40">
+                      "{currentSummary.reflection.prayer}"
+                    </p>
+                  </div>
+                )}
+              </motion.div>
+            )}
             
             {/* AI Guided Prompts List */}
             {guidedPrompts.length > 0 && (
@@ -408,16 +463,15 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
 
         {/* Reflection Controls */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-6 pt-4 pb-12">
-          <label className="flex items-center space-x-4 group cursor-pointer">
-            <button
-              role="switch"
-              aria-checked={includeReflection}
-              onClick={handleToggleReflectionAndReprocess}
-              disabled={reflectionBusy || isLoading}
+          <div 
+            onClick={!reflectionBusy && !isLoading ? handleToggleReflectionAndReprocess : undefined}
+            className="flex items-center space-x-4 group cursor-pointer select-none"
+          >
+            <div
               className={`
                 relative w-14 h-8 rounded-full transition-all duration-500 focus:outline-none
                 ${includeReflection ? 'bg-indigo-900 shadow-inner' : 'bg-indigo-100'}
-                disabled:opacity-50
+                ${reflectionBusy || isLoading ? 'opacity-50 cursor-not-allowed' : ''}
               `}
             >
               <span className={`
@@ -426,16 +480,16 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
               `}>
                  <Sparkles className={`w-3.5 h-3.5 ${includeReflection ? 'text-amber-500' : 'text-indigo-200'}`} />
               </span>
-            </button>
-            <div className="flex flex-col">
-               <span className="text-base font-serif font-black text-indigo-950">
+            </div>
+            <div className="flex flex-col text-left">
+               <span className="text-base font-serif font-black text-indigo-950 dark:text-white group-hover:text-amber-500 transition-colors">
                   AI Deep Reflection
                </span>
-               <span className="text-xs text-indigo-900/40 font-bold uppercase tracking-widest">
-                  {reflectionBusy ? 'Illuminating…' : 'Enhance Study Guide'}
+               <span className="text-xs text-indigo-900/40 dark:text-slate-400 font-bold uppercase tracking-widest">
+                  {reflectionBusy ? 'Illuminating…' : includeReflection ? 'Study Guide Enhanced ✓' : 'Enhance Study Guide'}
                </span>
             </div>
-          </label>
+          </div>
           
           <button onClick={onGoHome} className="btn-sacred-ghost px-8 py-3 bg-white shadow-sm border border-indigo-50">
             ← Return Home
