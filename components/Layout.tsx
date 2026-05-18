@@ -172,14 +172,26 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
             </Show>
           </nav>
 
-          {/* Mobile Theme Toggle only */}
-          <div className="md:hidden">
+          {/* Mobile Actions: Clerk Auth & Theme Toggle */}
+          <div className="md:hidden flex items-center space-x-2">
             <button
               onClick={() => setDark(d => !d)}
-              className="p-2.5 rounded-xl text-indigo-900/40 hover:text-indigo-900 bg-white/50 border border-indigo-50 shadow-sm"
+              className="p-2 rounded-xl text-indigo-900/40 hover:text-indigo-950 bg-white/50 border border-indigo-50 shadow-sm active:scale-95 transition-all"
+              aria-label="Toggle theme"
             >
               {dark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
+            <div className="w-px h-4 bg-indigo-100/80" />
+            <Show when="signed-out">
+              <SignInButton mode="modal">
+                <button className="px-3 py-1.5 text-xs font-black bg-indigo-950 text-amber-100 rounded-xl hover:bg-indigo-900 active:scale-95 transition-all shadow-md">
+                  Sign In
+                </button>
+              </SignInButton>
+            </Show>
+            <Show when="signed-in">
+              <UserButton afterSignOutUrl="/" />
+            </Show>
           </div>
         </div>
       </header>
@@ -197,15 +209,16 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
         <nav className="bg-white/95 backdrop-blur-2xl border border-indigo-50 shadow-xl rounded-2xl py-1.5 px-3 flex items-center justify-around">
           {mobileNavBtn('home', 'Home', Home)}
           {mobileNavBtn('history', 'Library', History)}
-          {/* Center FAB — Start Scribing a Sermon */}
+          {/* Center FAB — Start Scribing a Sermon (Opens live recording) */}
           <div className="relative -top-4 flex flex-col items-center">
             <button 
-              onClick={() => onNavigate('new')}
+              onClick={() => onNavigate('listening')}
               className="w-12 h-12 bg-indigo-950 rounded-full flex items-center justify-center shadow-lg shadow-indigo-950/20 border border-amber-200/20 active:scale-90 hover:scale-105 transition-all"
+              aria-label="Start recording sermon"
             >
                <BookOpen className="w-5 h-5 text-amber-200" />
             </button>
-            <span className="text-[8.5px] font-black uppercase tracking-tight text-indigo-900/40 mt-0.5">Scribe</span>
+            <span className="text-[9.5px] font-black uppercase tracking-widest text-indigo-950 mt-1">Scribe</span>
           </div>
           {tier === 'free' ? mobileNavBtn('pricing', 'Upgrade', Sparkles) : (
             <button onClick={() => onNavigate('pricing')} className="flex flex-col items-center justify-center space-y-0.5 group active:scale-95 transition-transform">
