@@ -41,10 +41,12 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const { isPro } = useSubscription();
 
-  // Strict positive match — both IDs must be present and equal.
-  // Old records with no stored creatorId are treated as read-only for everyone
-  // until the actual owner opens and re-saves them.
-  const isCreator = !!(activeUserId && creatorId && activeUserId === creatorId);
+  // isCreator for likes & journal:
+  // Only block when we KNOW the viewer is someone else (both IDs present and different).
+  // If creatorId is missing (old records pre-dating the user_id field), default to allowed
+  // so the actual owner is never locked out of their own notes.
+  // The delete button has its own separate strict guard (positive match required).
+  const isCreator = !(creatorId && activeUserId && creatorId !== activeUserId);
 
   const [journalText, setJournalText] = useState(summary.reflection?.reflection_text || '');
   const [guidedPrompts, setGuidedPrompts] = useState<string[]>([]);

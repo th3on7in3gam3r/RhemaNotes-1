@@ -165,7 +165,7 @@ function App() {
   
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const { user } = useUser();
+  const { user, isLoaded: clerkLoaded } = useUser();
 
   useEffect(() => {
     window.addEventListener('beforeinstallprompt', (e) => {
@@ -184,8 +184,11 @@ function App() {
   const { tier, isPro, isLoadingTier } = useSubscription();
 
   useEffect(() => {
+    // Wait for Clerk to finish loading so we never fetch history as 'guest'
+    // when the real signed-in user is about to be resolved.
+    if (!clerkLoaded) return;
     getSermonHistory(user?.id || 'guest').then(setHistory);
-  }, [user]);
+  }, [user, clerkLoaded]);
 
   useEffect(() => { 
     // Check if first time user
