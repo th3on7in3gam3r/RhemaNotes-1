@@ -199,13 +199,10 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
 
       {/* ── Mobile Bottom Navigation ── */}
       <div className="md:hidden fixed bottom-4 left-4 right-4 z-[60]">
-        <nav className="bg-white/95 backdrop-blur-2xl border border-indigo-50 shadow-xl rounded-2xl py-1.5 px-2 flex items-center justify-between">
+        <nav className="bg-white/95 backdrop-blur-2xl border border-indigo-50 shadow-xl rounded-2xl py-1.5 px-3 flex items-center justify-around">
           {mobileNavBtn('home', 'Home', Home)}
-          {tier === 'free'
-            ? mobileNavBtn('pricing', 'Upgrade', Sparkles)
-            : mobileNavBtn('history', 'Library', History)
-          }
-          {/* Center FAB — Start Scribing */}
+          {mobileNavBtn('history', 'Library', History)}
+          {/* Center FAB — Start Scribing a Sermon (Opens live recording) */}
           <div className="relative -top-4 flex flex-col items-center">
             <button
               onClick={() => onNavigate('listening')}
