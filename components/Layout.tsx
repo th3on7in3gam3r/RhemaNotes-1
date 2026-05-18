@@ -190,7 +190,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
               </SignInButton>
             </Show>
             <Show when="signed-in">
-              <UserButton afterSignOutUrl="/" />
+              <UserButton />
             </Show>
           </div>
         </div>

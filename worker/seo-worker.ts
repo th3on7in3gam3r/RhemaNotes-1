@@ -101,7 +101,7 @@ export default {
 
     // 4. Fetch the base index.html for SPA routing + SEO injection
     const indexUrl = new URL('/index.html', url.origin);
-    const assetResponse = await env.ASSETS.fetch(new Request(indexUrl.toString()));
+    const assetResponse = await env.ASSETS.fetch(indexUrl.toString());
     if (!assetResponse.ok) return assetResponse;
 
     const metaHTML = await resolveMetaHTML(path, env);
