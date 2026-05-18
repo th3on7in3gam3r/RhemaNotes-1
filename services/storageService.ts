@@ -64,14 +64,30 @@ export const getSermonHistory = async (): Promise<SermonHistoryItem[]> => {
         // If we already have this sermon cached locally with detailed insights, preserve them!
         if (localMap.has(s.id)) {
           const localItem = localMap.get(s.id)!;
+          
+          let parsedCloudSummary: SermonSummaryOutput | null = null;
+          if (s.summary_json) {
+            try {
+              parsedCloudSummary = JSON.parse(s.summary_json);
+            } catch {}
+          }
+
+          const localScripturesCount = localItem.summary.scriptures?.length ?? 0;
+          const cloudScripturesCount = parsedCloudSummary?.scriptures?.length ?? 0;
+
+          // If the D1 cloud database contains scriptures while local cache has 0, auto-heal and restore!
+          const mergedSummary = (cloudScripturesCount > localScripturesCount && parsedCloudSummary)
+            ? parsedCloudSummary
+            : localItem.summary;
+
           return {
             ...localItem,
             timestamp: new Date(s.created_at).getTime(),
             summary: {
-              ...localItem.summary,
-              title: s.title || localItem.summary.title,
-              main_topic: s.main_topic || localItem.summary.main_topic,
-              clean_transcript: s.clean_transcript || localItem.summary.clean_transcript
+              ...mergedSummary,
+              title: s.title || mergedSummary.title,
+              main_topic: s.main_topic || mergedSummary.main_topic,
+              clean_transcript: s.clean_transcript || mergedSummary.clean_transcript
             }
           };
         }
