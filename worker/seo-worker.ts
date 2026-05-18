@@ -179,8 +179,8 @@ async function handleSermonsAPI(request: Request, env: Env): Promise<Response> {
     if (request.method === 'PATCH' && sermonId) {
       const data: any = await request.json();
       await env.DB.prepare(
-        `UPDATE sermons SET title = ?, main_topic = ?, clean_transcript = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
-      ).bind(data.title, data.main_topic, data.clean_transcript, sermonId).run();
+        `UPDATE sermons SET title = ?, main_topic = ?, clean_transcript = ?, summary_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+      ).bind(data.title, data.main_topic, data.clean_transcript, data.summary_json || null, sermonId).run();
       return new Response(JSON.stringify({ success: true }), { headers: cors });
     }
 
