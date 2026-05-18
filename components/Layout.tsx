@@ -199,12 +199,15 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
 
       {/* ── Mobile Bottom Navigation ── */}
       <div className="md:hidden fixed bottom-4 left-4 right-4 z-[60]">
-        <nav className="bg-white/95 backdrop-blur-2xl border border-indigo-50 shadow-xl rounded-2xl py-1.5 px-3 flex items-center justify-around">
+        <nav className="bg-white/95 backdrop-blur-2xl border border-indigo-50 shadow-xl rounded-2xl py-1.5 px-2 flex items-center justify-between">
           {mobileNavBtn('home', 'Home', Home)}
-          {mobileNavBtn('history', 'Library', History)}
-          {/* Center FAB — Start Scribing a Sermon (Opens live recording) */}
+          {tier === 'free'
+            ? mobileNavBtn('pricing', 'Upgrade', Sparkles)
+            : mobileNavBtn('history', 'Library', History)
+          }
+          {/* Center FAB — Start Scribing */}
           <div className="relative -top-4 flex flex-col items-center">
-            <button 
+            <button
               onClick={() => onNavigate('listening')}
               className="w-12 h-12 bg-indigo-950 rounded-full flex items-center justify-center shadow-lg shadow-indigo-950/20 border border-amber-200/20 active:scale-90 hover:scale-105 transition-all"
               aria-label="Start recording sermon"
@@ -213,7 +216,6 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
             </button>
             <span className="text-[9.5px] font-black uppercase tracking-widest text-indigo-950 mt-1">Scribe</span>
           </div>
-          {tier === 'free' && mobileNavBtn('pricing', 'Upgrade', Sparkles)}
           {mobileNavBtn('profile', 'Dashboard', User)}
         </nav>
       </div>
