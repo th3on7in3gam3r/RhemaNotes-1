@@ -37,7 +37,8 @@ export const saveSermonToHistory = async (summary: SermonSummaryOutput): Promise
         title: summary.title,
         main_topic: summary.main_topic,
         clean_transcript: summary.clean_transcript,
-        source_type: 'text' // Logic to determine type can be added here
+        source_type: 'text', // Logic to determine type can be added here
+        summary_json: JSON.stringify(summary)
       })
     });
   } catch (e) {
@@ -47,36 +48,74 @@ export const saveSermonToHistory = async (summary: SermonSummaryOutput): Promise
   return newItem;
 };
 
-/**
- * Fetches sermon history. Synchronizes local storage with the D1 cloud database.
- */
 export const getSermonHistory = async (): Promise<SermonHistoryItem[]> => {
+  // 1. Load current local cache first to prevent any data loss
+  const localHistory = await localforage.getItem<SermonHistoryItem[]>(STORAGE_KEY) || [];
+  const localMap = new Map(localHistory.map(item => [item.id, item]));
+
   try {
-    // 1. Fetch from cloud
+    // 2. Fetch from cloud
     const response = await fetch(API_BASE);
     if (response.ok) {
       const cloudSermons: any[] = await response.json();
       
       // Map D1 rows back to SermonHistoryItem format
-      const formatted: SermonHistoryItem[] = cloudSermons.map(s => ({
-        id: s.id,
-        timestamp: new Date(s.created_at).getTime(),
-        summary: {
-          title: s.title,
-          main_topic: s.main_topic,
-          clean_transcript: s.clean_transcript,
-          // Note: Full JSON blobs (scriptures, etc) would need separate tables 
-          // or JSON parsing if stored as text. For now, we sync the core metadata.
-          scriptures: [], 
-          key_points: [],
-          quotes: [],
-          applications: [],
-          open_questions: [],
-          actionable_insights: [],
+      const formatted: SermonHistoryItem[] = cloudSermons.map(s => {
+        // If we already have this sermon cached locally with detailed insights, preserve them!
+        if (localMap.has(s.id)) {
+          const localItem = localMap.get(s.id)!;
+          return {
+            ...localItem,
+            timestamp: new Date(s.created_at).getTime(),
+            summary: {
+              ...localItem.summary,
+              title: s.title || localItem.summary.title,
+              main_topic: s.main_topic || localItem.summary.main_topic,
+              clean_transcript: s.clean_transcript || localItem.summary.clean_transcript
+            }
+          };
         }
-      }));
 
-      // 2. Update local cache
+        // If we don't have it locally, attempt to parse the full summary_json from D1
+        let parsedSummary: SermonSummaryOutput;
+        if (s.summary_json) {
+          try {
+            parsedSummary = JSON.parse(s.summary_json);
+          } catch {
+            parsedSummary = {
+              title: s.title,
+              main_topic: s.main_topic,
+              clean_transcript: s.clean_transcript,
+              scriptures: [],
+              key_points: [],
+              quotes: [],
+              applications: [],
+              open_questions: [],
+              actionable_insights: [],
+            };
+          }
+        } else {
+          parsedSummary = {
+            title: s.title,
+            main_topic: s.main_topic,
+            clean_transcript: s.clean_transcript,
+            scriptures: [],
+            key_points: [],
+            quotes: [],
+            applications: [],
+            open_questions: [],
+            actionable_insights: [],
+          };
+        }
+
+        return {
+          id: s.id,
+          timestamp: new Date(s.created_at).getTime(),
+          summary: parsedSummary
+        };
+      });
+
+      // 3. Update local cache with merged list
       if (formatted.length > 0) {
         await localforage.setItem(STORAGE_KEY, formatted);
         return formatted;
@@ -86,9 +125,8 @@ export const getSermonHistory = async (): Promise<SermonHistoryItem[]> => {
     console.warn('D1 fetch failed, falling back to local storage.', e);
   }
 
-  // 3. Fallback to local storage
-  const stored = await localforage.getItem<SermonHistoryItem[]>(STORAGE_KEY);
-  return stored || [];
+  // 4. Fallback to local storage
+  return localHistory;
 };
 
 export const deleteSermonFromHistory = async (id: string): Promise<void> => {
@@ -121,7 +159,8 @@ export const updateSermonInHistory = async (id: string, summary: SermonSummaryOu
       body: JSON.stringify({
         title: summary.title,
         main_topic: summary.main_topic,
-        clean_transcript: summary.clean_transcript
+        clean_transcript: summary.clean_transcript,
+        summary_json: JSON.stringify(summary)
       })
     });
   } catch (e) {

@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS sermons (
     is_public INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    deleted_at DATETIME
+    deleted_at DATETIME,
+    summary_json TEXT
 );
 
 -- Study Resources
