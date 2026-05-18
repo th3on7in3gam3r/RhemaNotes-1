@@ -11,18 +11,16 @@ localforage.config({
   description: 'Stores generated sermon histories and transcripts'
 });
 
-/**
- * Saves a sermon to both local storage (IndexedDB) and the D1 cloud database.
- */
-export const saveSermonToHistory = async (summary: SermonSummaryOutput): Promise<SermonHistoryItem> => {
+export const saveSermonToHistory = async (summary: SermonSummaryOutput, userId: string = 'guest'): Promise<SermonHistoryItem> => {
   const newItem: SermonHistoryItem = {
     id: crypto.randomUUID(),
     timestamp: Date.now(),
     summary,
+    user_id: userId,
   };
 
   // 1. Save locally first (Instant feedback & Offline support)
-  const history = await getSermonHistory();
+  const history = await getSermonHistory(userId);
   const updatedHistory = [newItem, ...history];
   await localforage.setItem(STORAGE_KEY, updatedHistory);
 
@@ -33,7 +31,7 @@ export const saveSermonToHistory = async (summary: SermonSummaryOutput): Promise
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         id: newItem.id,
-        user_id: 'guest', // Replace with real auth user ID when available
+        user_id: userId,
         title: summary.title,
         main_topic: summary.main_topic,
         clean_transcript: summary.clean_transcript,
@@ -48,14 +46,14 @@ export const saveSermonToHistory = async (summary: SermonSummaryOutput): Promise
   return newItem;
 };
 
-export const getSermonHistory = async (): Promise<SermonHistoryItem[]> => {
+export const getSermonHistory = async (userId: string = 'guest'): Promise<SermonHistoryItem[]> => {
   // 1. Load current local cache first to prevent any data loss
   const localHistory = await localforage.getItem<SermonHistoryItem[]>(STORAGE_KEY) || [];
   const localMap = new Map(localHistory.map(item => [item.id, item]));
 
   try {
-    // 2. Fetch from cloud
-    const response = await fetch(API_BASE);
+    // 2. Fetch from cloud with userId parameter to enforce creator isolation
+    const response = await fetch(`${API_BASE}?userId=${userId}`);
     if (response.ok) {
       const cloudSermons: any[] = await response.json();
       
@@ -83,6 +81,7 @@ export const getSermonHistory = async (): Promise<SermonHistoryItem[]> => {
           return {
             ...localItem,
             timestamp: new Date(s.created_at).getTime(),
+            user_id: s.user_id,
             summary: {
               ...mergedSummary,
               title: s.title || mergedSummary.title,
@@ -127,6 +126,7 @@ export const getSermonHistory = async (): Promise<SermonHistoryItem[]> => {
         return {
           id: s.id,
           timestamp: new Date(s.created_at).getTime(),
+          user_id: s.user_id,
           summary: parsedSummary
         };
       });
@@ -141,37 +141,43 @@ export const getSermonHistory = async (): Promise<SermonHistoryItem[]> => {
     console.warn('D1 fetch failed, falling back to local storage.', e);
   }
 
-  // 4. Fallback to local storage
-  return localHistory;
+  // 4. Fallback to local storage (filtering by user locally if loaded without internet)
+  return localHistory.filter(item => !item.user_id || item.user_id === userId);
 };
 
-export const deleteSermonFromHistory = async (id: string): Promise<void> => {
+export const deleteSermonFromHistory = async (id: string, userId: string = 'guest'): Promise<void> => {
   // 1. Remove locally
-  const history = await getSermonHistory();
+  const history = await getSermonHistory(userId);
   const updatedHistory = history.filter(item => item.id !== id);
   await localforage.setItem(STORAGE_KEY, updatedHistory);
 
-  // 2. Remove from cloud
+  // 2. Remove from cloud with creator security header and query string
   try {
-    await fetch(`${API_BASE}/${id}`, { method: 'DELETE' });
+    await fetch(`${API_BASE}/${id}?userId=${userId}`, { 
+      method: 'DELETE',
+      headers: { 'X-User-Id': userId }
+    });
   } catch (e) {
     console.warn('D1 Delete failed, sync will happen later.', e);
   }
 };
 
-export const updateSermonInHistory = async (id: string, summary: SermonSummaryOutput): Promise<void> => {
+export const updateSermonInHistory = async (id: string, summary: SermonSummaryOutput, userId: string = 'guest'): Promise<void> => {
   // 1. Update locally
-  const history = await getSermonHistory();
+  const history = await getSermonHistory(userId);
   const updatedHistory = history.map(item => 
     item.id === id ? { ...item, summary } : item
   );
   await localforage.setItem(STORAGE_KEY, updatedHistory);
 
-  // 2. Update in cloud
+  // 2. Update in cloud with creator security header and query string
   try {
-    await fetch(`${API_BASE}/${id}`, {
+    await fetch(`${API_BASE}/${id}?userId=${userId}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'X-User-Id': userId 
+      },
       body: JSON.stringify({
         title: summary.title,
         main_topic: summary.main_topic,

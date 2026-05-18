@@ -9,10 +9,11 @@ interface SermonHistoryProps {
   onDeleteItem: (id: string) => void;
   onGoHome: () => void;
   onLoadDemo: () => void;
+  activeUserId?: string;
 }
 
 export const SermonHistory: React.FC<SermonHistoryProps> = ({
-  history, onSelectSermon, onDeleteItem, onGoHome, onLoadDemo
+  history, onSelectSermon, onDeleteItem, onGoHome, onLoadDemo, activeUserId
 }) => {
   const [search, setSearch] = React.useState('');
   const fmt = (ts: number) =>
@@ -104,16 +105,18 @@ export const SermonHistory: React.FC<SermonHistoryProps> = ({
               </div>
 
               <div className="flex items-center space-x-3 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                <button
-                  onClick={e => {
-                    e.stopPropagation();
-                    if (confirm('Are you sure you want to remove this sermon study guide from your library? (This will not delete or affect any actual scriptures or Bible verses.)')) onDeleteItem(item.id);
-                  }}
-                  className="p-3 text-indigo-200 hover:text-rose-600 hover:bg-rose-50 transition-all rounded-xl"
-                  title="Remove sermon summary from library"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                {(!item.user_id || !activeUserId || item.user_id === activeUserId) && (
+                  <button
+                    onClick={e => {
+                      e.stopPropagation();
+                      if (confirm('Are you sure you want to remove this sermon study guide from your library? (This will not delete or affect any actual scriptures or Bible verses.)')) onDeleteItem(item.id);
+                    }}
+                    className="p-3 text-indigo-200 hover:text-rose-600 hover:bg-rose-50 transition-all rounded-xl"
+                    title="Remove sermon summary from library"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
                 <div className="w-10 h-10 rounded-full border border-indigo-50 flex items-center justify-center group-hover:border-amber-200 transition-colors">
                    <ChevronRight className="w-5 h-5 text-indigo-200 group-hover:text-amber-500 group-hover:translate-x-0.5 transition-all" />
                 </div>

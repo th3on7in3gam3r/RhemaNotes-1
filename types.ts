@@ -74,6 +74,7 @@ export interface SermonHistoryItem {
   id: string;
   timestamp: number;
   summary: SermonSummaryOutput;
+  user_id?: string;
 }
 
 export interface TabProps {

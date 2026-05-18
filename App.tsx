@@ -183,9 +183,11 @@ function App() {
 
   const { tier, isPro, isLoadingTier } = useSubscription();
 
+  useEffect(() => {
+    getSermonHistory(user?.id || 'guest').then(setHistory);
+  }, [user]);
+
   useEffect(() => { 
-    getSermonHistory().then(setHistory); 
-    
     // Check if first time user
     const hasOnboarded = localStorage.getItem('rhemanotes_onboarded');
     if (!hasOnboarded) setShowOnboarding(true);
@@ -216,7 +218,7 @@ function App() {
         result = await processSermonTranscript(transcript, includeReflection);
       }
       if (liveNotes) result.user_notes = [...(result.user_notes || []), ...liveNotes];
-      const savedItem = await saveSermonToHistory(result);
+      const savedItem = await saveSermonToHistory(result, user?.id || 'guest');
       setHistory(prev => [savedItem, ...prev]);
       setSermonOutput(result);
       setSelectedHistoryId(savedItem.id);
@@ -226,7 +228,7 @@ function App() {
     } finally {
       setIsLoading(false);
     }
-  }, [includeReflection]);
+  }, [includeReflection, user]);
 
   const handleProcessFile = useCallback(async (file: File) => {
     setIsLoading(true);
@@ -234,7 +236,7 @@ function App() {
     try {
       const result = await processSermonFile(file, includeReflection);
       result.audio_blob = file;
-      const savedItem = await saveSermonToHistory(result);
+      const savedItem = await saveSermonToHistory(result, user?.id || 'guest');
       setHistory(prev => [savedItem, ...prev]);
       setSermonOutput(result);
       setSelectedHistoryId(savedItem.id);
@@ -244,7 +246,7 @@ function App() {
     } finally {
       setIsLoading(false);
     }
-  }, [includeReflection]);
+  }, [includeReflection, user]);
 
   const handleSelectSermon = useCallback((item: SermonHistoryItem) => {
     setSermonOutput(item.summary);
@@ -255,12 +257,12 @@ function App() {
 
   const handleToggleReflection = useCallback(() => setIncludeReflection(p => !p), []);
   const handleUpdateHistory = useCallback(async () => {
-    const newHistory = await getSermonHistory();
+    const newHistory = await getSermonHistory(user?.id || 'guest');
     setHistory(newHistory);
-  }, []);
+  }, [user]);
 
   const handleDeleteItem = async (id: string) => {
-    await deleteSermonFromHistory(id);
+    await deleteSermonFromHistory(id, user?.id || 'guest');
     setHistory(prev => prev.filter(i => i.id !== id));
     if (selectedHistoryId === id) {
       setCurrentScreen('history');
@@ -272,7 +274,7 @@ function App() {
   const handleLoadDemo = async () => {
     setIsLoading(true);
     await new Promise(resolve => setTimeout(resolve, 800));
-    const savedItem = await saveSermonToHistory(DEMO_SERMON);
+    const savedItem = await saveSermonToHistory(DEMO_SERMON, user?.id || 'guest');
     setHistory(prev => [savedItem, ...prev]);
     setSermonOutput(DEMO_SERMON);
     setSelectedHistoryId(savedItem.id);
@@ -511,6 +513,7 @@ function App() {
             onDeleteItem={handleDeleteItem}
             onGoHome={handleGoHome}
             onLoadDemo={handleLoadDemo}
+            activeUserId={user?.id || 'guest'}
           />
         );
 
@@ -524,6 +527,8 @@ function App() {
             isLoading={isLoading}
             historyId={selectedHistoryId || undefined}
             onUpdateHistory={handleUpdateHistory}
+            activeUserId={user?.id || 'guest'}
+            creatorId={history.find(h => h.id === selectedHistoryId)?.user_id}
           />
         ) : (
           <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">

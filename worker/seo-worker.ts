@@ -143,11 +143,12 @@ async function handleSermonsAPI(request: Request, env: Env): Promise<Response> {
   };
 
   try {
-    // GET /api/sermons — list all sermons
+    // GET /api/sermons — list only the requested user's sermons
     if (request.method === 'GET' && !sermonId) {
+      const userId = url.searchParams.get('userId') || 'guest';
       const { results } = await env.DB.prepare(
-        'SELECT id, title, main_topic, source_type, created_at, summary_json FROM sermons ORDER BY created_at DESC LIMIT 100'
-      ).all();
+        'SELECT id, user_id, title, main_topic, source_type, created_at, summary_json FROM sermons WHERE user_id = ? ORDER BY created_at DESC LIMIT 100'
+      ).bind(userId).all();
       return new Response(JSON.stringify(results), { headers: cors });
     }
 
@@ -156,27 +157,48 @@ async function handleSermonsAPI(request: Request, env: Env): Promise<Response> {
       const data: any = await request.json();
       const id = data.id || crypto.randomUUID();
       await env.DB.prepare(
-        `INSERT INTO sermons (id, user_id, title, main_topic, clean_transcript, source_type, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+        `INSERT INTO sermons (id, user_id, title, main_topic, clean_transcript, source_type, summary_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
       ).bind(
         id,
         data.user_id || 'guest',
         data.title || 'Untitled Sermon',
         data.main_topic || '',
         data.clean_transcript || '',
-        data.source_type || 'text'
+        data.source_type || 'text',
+        data.summary_json || null
       ).run();
       return new Response(JSON.stringify({ success: true, id }), { headers: cors });
     }
 
     // DELETE /api/sermons/:id
     if (request.method === 'DELETE' && sermonId) {
+      const requestingUserId = request.headers.get('X-User-Id') || url.searchParams.get('userId') || 'guest';
+      const sermon = await env.DB.prepare('SELECT user_id FROM sermons WHERE id = ?').bind(sermonId).first() as any;
+      
+      if (!sermon) {
+        return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: cors });
+      }
+      if (sermon.user_id !== requestingUserId) {
+        return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: cors });
+      }
+
       await env.DB.prepare('DELETE FROM sermons WHERE id = ?').bind(sermonId).run();
       return new Response(JSON.stringify({ success: true }), { headers: cors });
     }
 
     // PATCH /api/sermons/:id
     if (request.method === 'PATCH' && sermonId) {
+      const requestingUserId = request.headers.get('X-User-Id') || url.searchParams.get('userId') || 'guest';
+      const sermon = await env.DB.prepare('SELECT user_id FROM sermons WHERE id = ?').bind(sermonId).first() as any;
+      
+      if (!sermon) {
+        return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: cors });
+      }
+      if (sermon.user_id !== requestingUserId) {
+        return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: cors });
+      }
+
       const data: any = await request.json();
       await env.DB.prepare(
         `UPDATE sermons SET title = ?, main_topic = ?, clean_transcript = ?, summary_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`

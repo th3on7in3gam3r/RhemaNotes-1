@@ -24,10 +24,13 @@ interface SermonSummaryProps {
   isLoading: boolean;
   historyId?: string;
   onUpdateHistory?: () => void;
+  activeUserId?: string;
+  creatorId?: string;
 }
 
 export const SermonSummary: React.FC<SermonSummaryProps> = ({
   summary, onGoHome, includeReflection, onToggleReflection, isLoading, historyId, onUpdateHistory,
+  activeUserId, creatorId,
 }) => {
   const [sidebarView, setSidebarView] = useState<'chat' | 'bible'>('chat');
   const [currentSummary, setCurrentSummary] = useState<SermonSummaryOutput>(summary);
@@ -37,6 +40,8 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
   const [copied, setCopied] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const { isPro } = useSubscription();
+
+  const isCreator = !creatorId || !activeUserId || activeUserId === creatorId;
 
   const [journalText, setJournalText] = useState(summary.reflection?.reflection_text || '');
   const [guidedPrompts, setGuidedPrompts] = useState<string[]>([]);
@@ -90,12 +95,16 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
   }, [historyId, onUpdateHistory]);
 
   const handleToggleLike = useCallback(async () => {
+    if (!isCreator) {
+      alert("Only the creator of this sermon note is allowed to like/favorite it.");
+      return;
+    }
     const updated = {
       ...currentSummary,
       liked: !currentSummary.liked
     };
     await handleUpdateSummarization(updated);
-  }, [currentSummary, handleUpdateSummarization]);
+  }, [currentSummary, handleUpdateSummarization, isCreator]);
 
   const openInBible = useCallback((reference: string) => {
     setBibleInitialRef(reference);
@@ -103,6 +112,10 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
   }, []);
 
   const handleSaveJournal = useCallback(async () => {
+    if (!isCreator) {
+      alert("Only the creator of this sermon note is allowed to save journal entries.");
+      return;
+    }
     setSaveStatus('saving');
     try {
       const updated = {
@@ -119,7 +132,7 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
       console.error("Failed to save reflection journal:", err);
       setSaveStatus('idle');
     }
-  }, [currentSummary, journalText, handleUpdateSummarization]);
+  }, [currentSummary, journalText, handleUpdateSummarization, isCreator]);
 
   const handleLoadGuidedPrompts = useCallback(async () => {
     setIsLoadingPrompts(true);
@@ -209,11 +222,12 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
               onClick={handleToggleLike}
               className={`
                 p-2.5 rounded-2xl border transition-all shadow-sm active:scale-95 flex items-center justify-center
+                ${!isCreator ? 'opacity-60 cursor-not-allowed' : ''}
                 ${currentSummary.liked 
                   ? 'bg-rose-50 border-rose-200 text-rose-500 hover:bg-rose-100 dark:bg-rose-950 dark:border-rose-900/50 dark:text-rose-400' 
                   : 'bg-indigo-50/50 border-indigo-100/50 text-indigo-400 hover:bg-indigo-50 hover:text-indigo-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}
               `}
-              title={currentSummary.liked ? "Remove from Favorites" : "Save to Favorites"}
+              title={!isCreator ? "Only the creator can favorite this sermon" : currentSummary.liked ? "Remove from Favorites" : "Save to Favorites"}
             >
               <Heart className={`w-5 h-5 ${currentSummary.liked ? 'fill-current' : ''}`} />
             </button>
@@ -416,9 +430,11 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
                     <button
                       key={idx}
                       onClick={() => {
+                        if (!isCreator) return;
                         setJournalText(prev => prev ? `${prev}\n\n* ${prompt}\n` : `* ${prompt}\n`);
                       }}
-                      className="w-full text-left p-3.5 bg-amber-50/40 hover:bg-amber-50 dark:bg-slate-800/40 dark:hover:bg-slate-800/80 border border-amber-100 dark:border-slate-800 rounded-2xl text-xs font-medium text-slate-700 dark:text-slate-300 transition-all hover:translate-x-0.5 active:scale-[0.99]"
+                      disabled={!isCreator}
+                      className="w-full text-left p-3.5 bg-amber-50/40 hover:bg-amber-50 dark:bg-slate-800/40 dark:hover:bg-slate-800/80 border border-amber-100 dark:border-slate-800 rounded-2xl text-xs font-medium text-slate-700 dark:text-slate-300 transition-all hover:translate-x-0.5 active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {prompt}
                     </button>
@@ -430,28 +446,31 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
             <textarea 
               value={journalText}
               onChange={(e) => setJournalText(e.target.value)}
-              placeholder="What is your main takeaway for your life this week?"
-              className="w-full min-h-[160px] p-6 bg-indigo-50/30 border-2 border-indigo-50 dark:border-slate-800 rounded-[32px] font-serif text-lg text-indigo-950 dark:text-white placeholder:text-indigo-900/20 focus:outline-none focus:border-amber-200 transition-all"
+              disabled={!isCreator}
+              placeholder={!isCreator ? "Only the creator of this sermon note is allowed to save journal takeaways." : "What is your main takeaway for your life this week?"}
+              className="w-full min-h-[160px] p-6 bg-indigo-50/30 border-2 border-indigo-50 dark:border-slate-800 rounded-[32px] font-serif text-lg text-indigo-950 dark:text-white placeholder:text-indigo-900/20 focus:outline-none focus:border-amber-200 transition-all disabled:opacity-75 disabled:cursor-not-allowed"
             />
             
             <div className="flex flex-col sm:flex-row gap-4 pt-4">
               <button 
                 onClick={handleSaveJournal}
-                disabled={saveStatus === 'saving'}
-                className="btn-sacred-primary flex-1 py-4 font-black transition-all flex items-center justify-center space-x-2"
+                disabled={saveStatus === 'saving' || !isCreator}
+                className="btn-sacred-primary flex-1 py-4 font-black transition-all flex items-center justify-center space-x-2 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                  <span>
-                   {saveStatus === 'saving' 
-                     ? 'Saving...' 
-                     : saveStatus === 'saved' 
-                     ? 'Journal Saved! ✓' 
-                     : 'Save to Journal'}
+                    {!isCreator 
+                      ? 'Read-Only Journal'
+                      : saveStatus === 'saving' 
+                      ? 'Saving...' 
+                      : saveStatus === 'saved' 
+                      ? 'Journal Saved! ✓' 
+                      : 'Save to Journal'}
                  </span>
               </button>
               <button 
                 onClick={handleLoadGuidedPrompts}
-                disabled={isLoadingPrompts}
-                className="btn-sacred-gold flex-1 py-4 flex items-center justify-center space-x-2 font-black transition-all"
+                disabled={isLoadingPrompts || !isCreator}
+                className="btn-sacred-gold flex-1 py-4 flex items-center justify-center space-x-2 font-black transition-all disabled:opacity-60 disabled:cursor-not-allowed"
               >
                  {isLoadingPrompts ? (
                    <RefreshCw className="w-4 h-4 animate-spin text-amber-700" />
