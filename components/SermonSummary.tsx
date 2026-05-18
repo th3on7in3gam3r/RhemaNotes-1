@@ -105,7 +105,7 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
     }
   }, [currentSummary, includeReflection, onToggleReflection, handleUpdateSummarization]);
 
-  const [activeResource, setActiveResource] = useState<'transcript' | 'notes' | 'study' | 'apply' | null>(null);
+  const [activeResource, setActiveResource] = useState<'transcript' | 'notes' | 'study' | 'apply' | null>('notes');
 
   const renderResourceContent = () => {
     switch (activeResource) {

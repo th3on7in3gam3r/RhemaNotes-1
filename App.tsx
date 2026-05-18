@@ -250,6 +250,7 @@ function App() {
     setSermonOutput(item.summary);
     setSelectedHistoryId(item.id);
     setCurrentScreen('summary');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
   const handleToggleReflection = useCallback(() => setIncludeReflection(p => !p), []);
@@ -296,6 +297,7 @@ function App() {
     setCurrentScreen(screen);
     if (screen === 'home') { setSermonOutput(null); setSelectedHistoryId(null); setPageMeta(HOME_META); }
     if (screen === 'history') setPageMeta(HISTORY_META);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
   const renderScreen = () => {
