@@ -163,6 +163,10 @@ export const getSermonHistory = async (userId: string = 'guest'): Promise<Sermon
               title: s.title || mergedSummary.title,
               main_topic: s.main_topic || mergedSummary.main_topic,
               clean_transcript: s.clean_transcript || mergedSummary.clean_transcript,
+              // Always preserve the local liked state — it's the most up-to-date
+              // source since a PATCH may still be in-flight or have failed.
+              // If local has never set liked, fall back to whatever cloud has.
+              liked: localItem.summary.liked ?? parsedCloudSummary?.liked ?? false,
             },
           };
         }

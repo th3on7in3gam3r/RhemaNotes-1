@@ -147,7 +147,7 @@ async function handleSermonsAPI(request: Request, env: Env): Promise<Response> {
     if (request.method === 'GET' && !sermonId) {
       const userId = url.searchParams.get('userId') || 'guest';
       const { results } = await env.DB.prepare(
-        'SELECT id, user_id, title, main_topic, source_type, created_at, summary_json FROM sermons WHERE user_id = ? ORDER BY created_at DESC LIMIT 100'
+        'SELECT id, user_id, title, main_topic, clean_transcript, source_type, created_at, summary_json FROM sermons WHERE user_id = ? AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 100'
       ).bind(userId).all();
       return new Response(JSON.stringify(results), { headers: cors });
     }
@@ -195,14 +195,21 @@ async function handleSermonsAPI(request: Request, env: Env): Promise<Response> {
       if (!sermon) {
         return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: cors });
       }
-      if (sermon.user_id !== requestingUserId) {
-        return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: cors });
+
+      // Allow update if:
+      //   a) the requesting user is the creator, OR
+      //   b) the sermon was saved as 'guest' and a real user is now claiming it
+      //      (happens when a sermon is created before sign-in)
+      const isOwner = sermon.user_id === requestingUserId;
+      const isGuestClaim = sermon.user_id === 'guest' && requestingUserId !== 'guest';
+      if (!isOwner && !isGuestClaim) {
+        return new Response(JSON.stringify({ error: 'Forbidden', stored: sermon.user_id, requesting: requestingUserId }), { status: 403, headers: cors });
       }
 
       const data: any = await request.json();
       await env.DB.prepare(
-        `UPDATE sermons SET title = ?, main_topic = ?, clean_transcript = ?, summary_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
-      ).bind(data.title, data.main_topic, data.clean_transcript, data.summary_json || null, sermonId).run();
+        `UPDATE sermons SET user_id = ?, title = ?, main_topic = ?, clean_transcript = ?, summary_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+      ).bind(requestingUserId, data.title, data.main_topic, data.clean_transcript, data.summary_json || null, sermonId).run();
       return new Response(JSON.stringify({ success: true }), { headers: cors });
     }
 
