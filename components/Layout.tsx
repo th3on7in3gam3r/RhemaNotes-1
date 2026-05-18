@@ -233,7 +233,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
       </div>
 
       {/* ── Divine Footer ── */}
-      <footer className="py-12 border-t border-indigo-50 bg-white/50 text-center">
+      <footer className="py-12 pb-32 md:pb-12 border-t border-indigo-50 bg-white/50 text-center">
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex items-center justify-center space-x-2 mb-2 text-indigo-900/60 font-serif font-bold italic">
              <BookOpen className="w-4 h-4" />
@@ -243,14 +243,14 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
             Capture the spirit of every sermon. Built for your spiritual growth.
           </p>
           <p className="text-xs text-indigo-900/30 mt-3">
-            A product by{' '}
+            A product created by faith. Inspired by{' '}
             <a
-              href="https://biblefunland.com"
+              href="https://biblefunlandstudios.com"
               target="_blank"
               rel="noopener noreferrer"
               className="text-indigo-900/50 hover:text-indigo-900 font-semibold underline underline-offset-2 transition-colors"
             >
-              BibleFunLand.com
+              Biblefunland Studios
             </a>
           </p>
           <div className="flex items-center justify-center space-x-4 mt-4">
