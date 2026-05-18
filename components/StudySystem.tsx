@@ -82,9 +82,9 @@ export const StudySystem: React.FC<StudySystemProps> = ({ summary, onUpdateSumma
   };
 
   return (
-    <div className="p-6 md:p-8 space-y-6">
+    <div className="p-4 md:p-6 space-y-6 w-full overflow-hidden">
       {/* Tool selector */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="flex flex-wrap gap-3 w-full">
         {TOOLS.map(tool => {
           const active = activeTool === tool.id;
           const Icon = tool.icon;
@@ -93,7 +93,7 @@ export const StudySystem: React.FC<StudySystemProps> = ({ summary, onUpdateSumma
               key={tool.id}
               onClick={() => setActiveTool(tool.id)}
               className={`
-                flex flex-col items-center justify-center p-5 rounded-2xl border-2
+                flex-1 min-w-[110px] sm:min-w-[140px] flex flex-col items-center justify-center p-4 rounded-2xl border-2
                 transition-all duration-200
                 ${active
                   ? `${tool.activeBg} ${tool.activeBorder} shadow-soft scale-[1.02]`
@@ -101,10 +101,10 @@ export const StudySystem: React.FC<StudySystemProps> = ({ summary, onUpdateSumma
                 }
               `}
             >
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 transition-colors ${active ? tool.activeIcon : 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500'}`}>
-                <Icon className="w-5 h-5" />
+              <div className={`w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center mb-2 md:mb-3 transition-colors ${active ? tool.activeIcon : 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500'}`}>
+                <Icon className="w-4 h-4 md:w-5 md:h-5" />
               </div>
-              <span className={`text-sm font-bold ${active ? tool.activeText : 'text-slate-500 dark:text-slate-400'}`}>
+              <span className={`text-xs md:text-sm font-bold ${active ? tool.activeText : 'text-slate-500 dark:text-slate-400'}`}>
                 {tool.label}
               </span>
             </button>

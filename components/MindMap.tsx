@@ -100,7 +100,7 @@ export const MindMap: React.FC<MindMapProps> = ({ data }) => {
             </div>
 
             <TransformComponent wrapperClass="!w-full !h-full">
-              <div className={`${isMobile ? 'p-16' : 'p-32'} flex items-center justify-center min-w-max min-h-max`}>
+              <div className={`${isMobile ? 'p-4' : 'p-6'} flex items-center justify-center min-w-max min-h-max`}>
                 <Node node={data} level={0} isMobile={isMobile} />
               </div>
             </TransformComponent>
