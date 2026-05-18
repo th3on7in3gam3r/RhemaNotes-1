@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useUser } from '@clerk/react';
+import logoImg from './logo.png';
 
 type AppScreen = 'home' | 'listening' | 'summary' | 'upload' | 'history' | 'youtube' | 'pricing' | 'success' | 'terms' | 'privacy';
 
@@ -304,7 +305,7 @@ function App() {
               <div className="relative group mb-2">
                 <div className="absolute inset-0 rounded-[2.5rem] bg-gradient-to-tr from-indigo-500/20 to-amber-500/20 blur-2xl group-hover:scale-110 transition-transform duration-500 opacity-80" />
                 <img 
-                  src="/logo.png" 
+                  src={logoImg} 
                   alt="RhemaNotes Logo" 
                   className="relative w-28 h-28 rounded-[2.5rem] shadow-2xl border border-indigo-50 group-hover:scale-105 transition-transform duration-300 z-10"
                 />
