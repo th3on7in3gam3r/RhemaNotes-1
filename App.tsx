@@ -307,11 +307,11 @@ function App() {
                 <div className="absolute -inset-4 rounded-[3.5rem] bg-gradient-to-r from-indigo-500/20 via-rose-500/10 to-amber-500/20 blur-3xl opacity-80 animate-pulse duration-[8000ms] pointer-events-none" />
                 <div className="absolute inset-0 rounded-[3rem] bg-gradient-to-tr from-indigo-500/30 to-amber-400/20 blur-xl opacity-60 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
                 
-                {/* Sleek spinning orbital gradient ring */}
-                <div className="absolute -inset-1.5 rounded-[3rem] bg-gradient-to-r from-indigo-500/40 via-amber-400/50 to-rose-500/40 opacity-70 blur-[1px] group-hover:animate-spin duration-15000 pointer-events-none" />
+                {/* Sleek spinning orbital gradient ring - always active for mobile, speeds up on hover! */}
+                <div className="absolute -inset-1.5 rounded-[3rem] bg-gradient-to-r from-indigo-500/40 via-amber-400/50 to-rose-500/40 opacity-70 blur-[1px] animate-spin duration-[30000ms] group-hover:duration-[15000ms] pointer-events-none" />
 
-                {/* Floating logo card with a dark bezel glass container */}
-                <div className="relative p-2.5 rounded-[2.8rem] bg-white/40 dark:bg-indigo-950/40 backdrop-blur-md border border-white/80 dark:border-indigo-900/50 shadow-2xl transform transition-all duration-500 hover:scale-[1.04] hover:-translate-y-1 z-10">
+                {/* Floating logo card with a dark bezel glass container - responsive to tactile mobile taps! */}
+                <div className="relative p-2.5 rounded-[2.8rem] bg-white/40 dark:bg-indigo-950/40 backdrop-blur-md border border-white/80 dark:border-indigo-900/50 shadow-2xl transform transition-all duration-500 hover:scale-[1.04] hover:-translate-y-1 active:scale-98 active:translate-y-0 z-10">
                   <div className="relative rounded-[2.2rem] overflow-hidden bg-indigo-950 p-1 border border-indigo-900/10 shadow-inner flex items-center justify-center">
                     <img 
                       src={logoImg} 

@@ -103,7 +103,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
             className="flex items-center space-x-3 group"
           >
             <div className="relative flex items-center justify-center">
-              <div className="w-10 h-10 rounded-xl overflow-hidden shadow-md border border-indigo-100/50 bg-indigo-950 flex items-center justify-center transform transition-all duration-300 group-hover:scale-105 group-hover:rotate-6">
+              <div className="w-10 h-10 rounded-xl overflow-hidden shadow-md border border-indigo-100/50 bg-indigo-950 flex items-center justify-center transform transition-all duration-300 group-hover:scale-105 group-hover:rotate-6 active:scale-95 active:rotate-0">
                 <img 
                   src={logoImg} 
                   alt="RhemaNotes Logo" 
