@@ -15,14 +15,14 @@ const Node: React.FC<{ node: MindMapNode; level: number; isMobile: boolean }> = 
       <motion.div
         initial={{ scale: 0, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        transition={{ delay: level * 0.08, type: 'spring', stiffness: 300, damping: 24 }}
+        transition={{ delay: level * 0.06, type: 'spring', stiffness: 300, damping: 24 }}
         className={`
-          px-5 py-3 rounded-2xl border-2 mb-6 text-center max-w-[220px] break-words
+          px-3.5 py-2.5 rounded-xl border mb-4 text-center max-w-[180px] break-words shadow-sm
           ${isRoot
-            ? 'bg-gradient-to-br from-blue-600 to-indigo-600 border-blue-400 text-white font-black text-sm md:text-base shadow-glow min-w-[160px] md:min-w-[180px]'
+            ? 'bg-gradient-to-br from-blue-600 to-indigo-600 border-blue-400 text-white font-black text-xs md:text-sm shadow-glow min-w-[130px] md:min-w-[150px]'
             : isMain
-            ? 'bg-white dark:bg-slate-800 border-blue-400 dark:border-blue-600 text-slate-900 dark:text-white font-bold text-xs md:text-sm shadow-soft min-w-[130px] md:min-w-[140px]'
-            : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 font-medium text-[10px] md:text-xs min-w-[110px] md:min-w-[120px]'
+            ? 'bg-white dark:bg-slate-800 border-blue-400 dark:border-blue-600 text-slate-900 dark:text-white font-bold text-[10px] md:text-xs shadow-soft min-w-[100px] md:min-w-[120px]'
+            : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 font-medium text-[9px] md:text-[10px] min-w-[90px] md:min-w-[100px]'
           }
         `}
       >
@@ -31,21 +31,21 @@ const Node: React.FC<{ node: MindMapNode; level: number; isMobile: boolean }> = 
 
       {node.children?.length ? (
         isMobile ? (
-          <div className="flex flex-col items-center relative pt-4 w-full">
-            <div className="absolute top-0 bottom-4 left-1/2 w-px bg-slate-200 dark:bg-slate-700 -translate-x-1/2" />
+          <div className="flex flex-col items-center relative pt-3 w-full">
+            <div className="absolute top-0 bottom-3 left-1/2 w-px bg-slate-200 dark:bg-slate-700 -translate-x-1/2" />
             {node.children.map(child => (
-              <div key={child.id} className="relative pt-4 w-full flex flex-col items-center">
+              <div key={child.id} className="relative pt-3 w-full flex flex-col items-center">
                 <Node node={child} level={level + 1} isMobile={isMobile} />
               </div>
             ))}
           </div>
         ) : (
-          <div className="flex space-x-8 relative pt-6">
-            <div className="absolute top-0 left-1/2 w-px h-6 bg-slate-200 dark:bg-slate-700 -translate-x-1/2" />
-            <div className="absolute top-6 left-[8%] right-[8%] h-px bg-slate-200 dark:bg-slate-700" />
+          <div className="flex space-x-4 md:space-x-6 relative pt-4">
+            <div className="absolute top-0 left-1/2 w-px h-4 bg-slate-200 dark:bg-slate-700 -translate-x-1/2" />
+            <div className="absolute top-4 left-[8%] right-[8%] h-px bg-slate-200 dark:bg-slate-700" />
             {node.children.map(child => (
-              <div key={child.id} className="relative pt-6">
-                <div className="absolute top-0 left-1/2 w-px h-6 bg-slate-200 dark:bg-slate-700 -translate-x-1/2" />
+              <div key={child.id} className="relative pt-4">
+                <div className="absolute top-0 left-1/2 w-px h-4 bg-slate-200 dark:bg-slate-700 -translate-x-1/2" />
                 <Node node={child} level={level + 1} isMobile={isMobile} />
               </div>
             ))}
@@ -58,13 +58,13 @@ const Node: React.FC<{ node: MindMapNode; level: number; isMobile: boolean }> = 
 
 export const MindMap: React.FC<MindMapProps> = ({ data }) => {
   const [isMobile, setIsMobile] = React.useState(false);
-  const [initialScale, setInitialScale] = React.useState(0.75);
+  const [initialScale, setInitialScale] = React.useState(0.55);
 
   React.useEffect(() => {
     const handleResize = () => {
       const mobile = window.innerWidth < 768;
       setIsMobile(mobile);
-      setInitialScale(mobile ? 0.45 : 0.75);
+      setInitialScale(mobile ? 0.35 : 0.55);
     };
     handleResize();
     window.addEventListener('resize', handleResize);
@@ -77,8 +77,8 @@ export const MindMap: React.FC<MindMapProps> = ({ data }) => {
         key={`${isMobile}-${initialScale}`}
         initialScale={initialScale} 
         centerOnInit 
-        minScale={0.15} 
-        maxScale={2.5}
+        minScale={0.1} 
+        maxScale={2.0}
       >
         {({ zoomIn, zoomOut, resetTransform }) => (
           <>
