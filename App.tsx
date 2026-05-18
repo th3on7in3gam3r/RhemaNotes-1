@@ -262,7 +262,15 @@ function App() {
   const handleUpdateHistory = useCallback(async () => {
     const newHistory = await getSermonHistory(user?.id || 'guest');
     setHistory(newHistory);
-  }, [user]);
+    
+    // Sync the currently selected sermon summary so UI updates (e.g. likes/hearts) persist
+    if (selectedHistoryId) {
+      const updatedSermon = newHistory.find(h => h.id === selectedHistoryId);
+      if (updatedSermon) {
+        setSermonOutput(updatedSermon.summary);
+      }
+    }
+  }, [user, selectedHistoryId]);
 
   const handleDeleteItem = async (id: string) => {
     // ── Creator-only guard ────────────────────────────────────────────────────

@@ -52,8 +52,10 @@ export const getSermonHistory = async (userId: string = 'guest'): Promise<Sermon
   const localMap = new Map(localHistory.map(item => [item.id, item]));
 
   try {
-    // 2. Fetch from cloud with userId parameter to enforce creator isolation
-    const response = await fetch(`${API_BASE}?userId=${userId}`);
+    // 2. Fetch from cloud with userId parameter to enforce creator isolation and bust cache
+    const response = await fetch(`${API_BASE}?userId=${userId}&t=${Date.now()}`, {
+      headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+    });
     if (response.ok) {
       const cloudSermons: any[] = await response.json();
       
@@ -132,9 +134,15 @@ export const getSermonHistory = async (userId: string = 'guest'): Promise<Sermon
       });
 
       // 3. Update local cache with merged list
-      if (formatted.length > 0) {
-        await localforage.setItem(STORAGE_KEY, formatted);
-        return formatted;
+      // Preserve local items that are not yet in the cloud (offline creations or delayed syncs)
+      const cloudIds = new Set(cloudSermons.map(s => s.id));
+      const localOnly = localHistory.filter(item => !cloudIds.has(item.id) && (!item.user_id || item.user_id === userId));
+      
+      const merged = [...formatted, ...localOnly].sort((a, b) => b.timestamp - a.timestamp);
+
+      if (merged.length > 0) {
+        await localforage.setItem(STORAGE_KEY, merged);
+        return merged;
       }
     }
   } catch (e) {
