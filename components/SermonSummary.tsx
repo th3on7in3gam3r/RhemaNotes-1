@@ -89,6 +89,14 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
     }
   }, [historyId, onUpdateHistory]);
 
+  const handleToggleLike = useCallback(async () => {
+    const updated = {
+      ...currentSummary,
+      liked: !currentSummary.liked
+    };
+    await handleUpdateSummarization(updated);
+  }, [currentSummary, handleUpdateSummarization]);
+
   const openInBible = useCallback((reference: string) => {
     setBibleInitialRef(reference);
     setSidebarView('bible');
@@ -195,13 +203,30 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
             </div>
           </div>
           
-          <button
-            onClick={handleCopyText}
-            className="absolute top-10 right-10 flex items-center space-x-2 px-5 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200/50 rounded-2xl text-sm font-black transition-all shadow-sm active:scale-95"
-          >
-            {copied ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
-            <span className="hidden sm:inline">{copied ? 'Preserved!' : 'Copy Notes'}</span>
-          </button>
+          <div className="absolute top-10 right-10 flex items-center space-x-3">
+            {/* Heart/Like Toggle */}
+            <button
+              onClick={handleToggleLike}
+              className={`
+                p-2.5 rounded-2xl border transition-all shadow-sm active:scale-95 flex items-center justify-center
+                ${currentSummary.liked 
+                  ? 'bg-rose-50 border-rose-200 text-rose-500 hover:bg-rose-100 dark:bg-rose-950 dark:border-rose-900/50 dark:text-rose-400' 
+                  : 'bg-indigo-50/50 border-indigo-100/50 text-indigo-400 hover:bg-indigo-50 hover:text-indigo-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}
+              `}
+              title={currentSummary.liked ? "Remove from Favorites" : "Save to Favorites"}
+            >
+              <Heart className={`w-5 h-5 ${currentSummary.liked ? 'fill-current' : ''}`} />
+            </button>
+
+            {/* Copy Notes */}
+            <button
+              onClick={handleCopyText}
+              className="flex items-center space-x-2 px-5 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200/50 rounded-2xl text-sm font-black transition-all shadow-sm active:scale-95 dark:bg-amber-950 dark:border-amber-900/50 dark:text-amber-200 dark:hover:bg-amber-900"
+            >
+              {copied ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+              <span className="hidden sm:inline">{copied ? 'Preserved!' : 'Copy Notes'}</span>
+            </button>
+          </div>
 
           {/* Decorative halo */}
           <div className="absolute -right-20 -bottom-20 w-80 h-80 bg-indigo-100/30 rounded-full blur-[100px] pointer-events-none" />

@@ -67,6 +67,7 @@ export interface SermonSummaryOutput {
   mind_map?: MindMapNode;
   chat_history?: ChatMessage[];
   audio_blob?: Blob;
+  liked?: boolean;
 }
 
 export interface SermonHistoryItem {

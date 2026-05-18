@@ -1,7 +1,7 @@
 import React from 'react';
 import { SermonHistoryItem } from '../types';
 import { Button } from './Button';
-import { BookOpen, ChevronRight, Trash2, Clock, BookMarked, Sparkles, Waves } from 'lucide-react';
+import { BookOpen, ChevronRight, Trash2, Clock, BookMarked, Sparkles, Waves, Heart } from 'lucide-react';
 
 interface SermonHistoryProps {
   history: SermonHistoryItem[];
@@ -84,8 +84,11 @@ export const SermonHistory: React.FC<SermonHistoryProps> = ({
                   <BookOpen className="w-6 h-6 text-indigo-400 group-hover:text-amber-200 transition-colors" />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="text-xl font-serif font-black text-indigo-950 truncate group-hover:text-indigo-700 transition-colors">
-                    {item.summary.title || 'Untitled Sermon'}
+                  <h3 className="text-xl font-serif font-black text-indigo-950 truncate group-hover:text-indigo-700 transition-colors flex items-center gap-2">
+                    <span>{item.summary.title || 'Untitled Sermon'}</span>
+                    {item.summary.liked && (
+                      <Heart className="w-4 h-4 text-rose-500 fill-current animate-pulse flex-shrink-0" />
+                    )}
                   </h3>
                   <div className="flex flex-wrap items-center gap-y-1 text-xs font-bold text-indigo-900/30 uppercase tracking-widest mt-1.5">
                     <span className="flex items-center">
@@ -104,10 +107,10 @@ export const SermonHistory: React.FC<SermonHistoryProps> = ({
                 <button
                   onClick={e => {
                     e.stopPropagation();
-                    if (confirm('Preserve space? This record will be removed from your library.')) onDeleteItem(item.id);
+                    if (confirm('Are you sure you want to remove this sermon study guide from your library? (This will not delete or affect any actual scriptures or Bible verses.)')) onDeleteItem(item.id);
                   }}
                   className="p-3 text-indigo-200 hover:text-rose-600 hover:bg-rose-50 transition-all rounded-xl"
-                  title="Remove from library"
+                  title="Remove sermon summary from library"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
