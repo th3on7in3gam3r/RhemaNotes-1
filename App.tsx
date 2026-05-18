@@ -604,7 +604,7 @@ function App() {
             onManageSubscription={handleManageSubscription}
             stats={{
               totalScribes: history.length,
-              favorites: history.filter(h => h.is_favorite).length
+              favorites: 0
             }}
           />
         );
