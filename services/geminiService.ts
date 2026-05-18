@@ -250,3 +250,43 @@ function fileToBase64(file: File): Promise<string> {
     reader.onerror = error => reject(error);
   });
 }
+
+export async function generateGuidedPrompts(
+  topic: string,
+  keyPoints: string[]
+): Promise<string[]> {
+  try {
+    const prompt = `Based on the following sermon details, generate exactly three (3) highly personalized, introspective, and practical reflection prompts/questions that help a believer apply this sermon to their daily life, relationship with God, and actions this week.
+    
+    Sermon Topic: ${topic}
+    Key Points:
+    ${keyPoints.map(p => `- ${p}`).join('\n')}
+
+    Format your response STRICTLY as a JSON array of three strings, like this:
+    ["Prompt 1", "Prompt 2", "Prompt 3"]`;
+
+    const response = await ai.models.generateContent({
+      model: GEMINI_MODEL,
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      config: {
+        responseMimeType: "application/json",
+      },
+    });
+
+    const text = response.text;
+    if (!text) throw new Error("Empty response from AI");
+    
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) {
+      return parsed.slice(0, 3).map(p => String(p));
+    }
+    throw new Error("Invalid array format from AI");
+  } catch (error) {
+    console.error("Error generating guided prompts:", error);
+    return [
+      `How does the truth of "${topic || 'this sermon'}" challenge your current way of thinking?`,
+      `What is one specific action you can take today to apply the key points of this message?`,
+      `Spend a moment in prayer: ask the Holy Spirit to reveal any area of your heart that needs alignment with this scripture.`
+    ];
+  }
+}

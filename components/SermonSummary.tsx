@@ -7,7 +7,7 @@ import { ApplyTab } from './ApplyTab';
 import { NotesTab } from './NotesTab';
 import { StudySystem } from './StudySystem';
 import { BibleTab } from './BibleTab';
-import { processSermonTranscript } from '../services/geminiService';
+import { processSermonTranscript, generateGuidedPrompts } from '../services/geminiService';
 import { updateSermonInHistory } from '../services/storageService';
 import { setPageMeta, buildSermonMeta } from '../services/seoService';
 import { BookOpen, RefreshCw, CheckCircle2, Copy, Sparkles, MessageSquare, Book, ChevronRight, Waves, Heart, FileText } from 'lucide-react';
@@ -38,7 +38,15 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const { isPro } = useSubscription();
 
-  useEffect(() => { setCurrentSummary(summary); }, [summary]);
+  const [journalText, setJournalText] = useState(summary.reflection?.reflection_text || '');
+  const [guidedPrompts, setGuidedPrompts] = useState<string[]>([]);
+  const [isLoadingPrompts, setIsLoadingPrompts] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+
+  useEffect(() => { 
+    setCurrentSummary(summary); 
+    setJournalText(summary.reflection?.reflection_text || '');
+  }, [summary]);
 
   useEffect(() => {
     setPageMeta(buildSermonMeta({
@@ -85,6 +93,40 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
     setBibleInitialRef(reference);
     setSidebarView('bible');
   }, []);
+
+  const handleSaveJournal = useCallback(async () => {
+    setSaveStatus('saving');
+    try {
+      const updated = {
+        ...currentSummary,
+        reflection: {
+          ...currentSummary.reflection,
+          reflection_text: journalText
+        }
+      };
+      await handleUpdateSummarization(updated);
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2500);
+    } catch (err) {
+      console.error("Failed to save reflection journal:", err);
+      setSaveStatus('idle');
+    }
+  }, [currentSummary, journalText, handleUpdateSummarization]);
+
+  const handleLoadGuidedPrompts = useCallback(async () => {
+    setIsLoadingPrompts(true);
+    try {
+      const prompts = await generateGuidedPrompts(
+        currentSummary.main_topic || currentSummary.title || '',
+        currentSummary.key_points || []
+      );
+      setGuidedPrompts(prompts);
+    } catch (err) {
+      console.error("Failed to load AI guided prompts:", err);
+    } finally {
+      setIsLoadingPrompts(false);
+    }
+  }, [currentSummary]);
 
   const handleToggleReflectionAndReprocess = useCallback(async () => {
     onToggleReflection();
@@ -278,18 +320,65 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
               Use this space to record how the Spirit is speaking to you through this message.
             </p>
             
+            {/* AI Guided Prompts List */}
+            {guidedPrompts.length > 0 && (
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="space-y-2 mb-4 text-left"
+              >
+                <p className="text-[10px] font-black uppercase tracking-wider text-amber-500 flex items-center space-x-1">
+                  <Sparkles className="w-3 h-3 text-amber-400" />
+                  <span>AI Guided Reflections (Click to insert):</span>
+                </p>
+                <div className="grid gap-2.5">
+                  {guidedPrompts.map((prompt, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        setJournalText(prev => prev ? `${prev}\n\n* ${prompt}\n` : `* ${prompt}\n`);
+                      }}
+                      className="w-full text-left p-3.5 bg-amber-50/40 hover:bg-amber-50 dark:bg-slate-800/40 dark:hover:bg-slate-800/80 border border-amber-100 dark:border-slate-800 rounded-2xl text-xs font-medium text-slate-700 dark:text-slate-300 transition-all hover:translate-x-0.5 active:scale-[0.99]"
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+
             <textarea 
+              value={journalText}
+              onChange={(e) => setJournalText(e.target.value)}
               placeholder="What is your main takeaway for your life this week?"
-              className="w-full min-h-[160px] p-6 bg-indigo-50/30 border-2 border-indigo-50 rounded-[32px] font-serif text-lg text-indigo-950 placeholder:text-indigo-900/20 focus:outline-none focus:border-amber-200 transition-all"
+              className="w-full min-h-[160px] p-6 bg-indigo-50/30 border-2 border-indigo-50 dark:border-slate-800 rounded-[32px] font-serif text-lg text-indigo-950 dark:text-white placeholder:text-indigo-900/20 focus:outline-none focus:border-amber-200 transition-all"
             />
             
             <div className="flex flex-col sm:flex-row gap-4 pt-4">
-              <button className="btn-sacred-primary flex-1 py-4">
-                 Save to Journal
+              <button 
+                onClick={handleSaveJournal}
+                disabled={saveStatus === 'saving'}
+                className="btn-sacred-primary flex-1 py-4 font-black transition-all flex items-center justify-center space-x-2"
+              >
+                 <span>
+                   {saveStatus === 'saving' 
+                     ? 'Saving...' 
+                     : saveStatus === 'saved' 
+                     ? 'Journal Saved! ✓' 
+                     : 'Save to Journal'}
+                 </span>
               </button>
-              <button className="btn-sacred-gold flex-1 py-4 flex items-center justify-center space-x-2">
-                 <Sparkles className="w-4 h-4" />
-                 <span>AI Guided Prompts</span>
+              <button 
+                onClick={handleLoadGuidedPrompts}
+                disabled={isLoadingPrompts}
+                className="btn-sacred-gold flex-1 py-4 flex items-center justify-center space-x-2 font-black transition-all"
+              >
+                 {isLoadingPrompts ? (
+                   <RefreshCw className="w-4 h-4 animate-spin text-amber-700" />
+                 ) : (
+                   <Sparkles className="w-4 h-4" />
+                 )}
+                 <span>{isLoadingPrompts ? 'Generating...' : 'AI Guided Prompts'}</span>
               </button>
             </div>
           </div>
