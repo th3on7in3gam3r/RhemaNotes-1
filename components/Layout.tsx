@@ -69,15 +69,15 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
     return (
       <button
         onClick={() => onNavigate(screen)}
-        className="flex flex-col items-center justify-center space-y-1 group relative"
+        className="flex flex-col items-center justify-center space-y-0.5 group relative active:scale-95 transition-transform"
       >
         <div className={`
-          p-2 rounded-xl transition-all duration-300
-          ${active ? 'bg-amber-100 text-amber-600 scale-110 shadow-sm' : 'text-indigo-900/40'}
+          p-1.5 rounded-full transition-all duration-300
+          ${active ? 'bg-amber-50 text-amber-600 scale-105 shadow-sm' : 'text-indigo-900/40'}
         `}>
           <Icon className="w-5 h-5" />
         </div>
-        <span className={`text-[10px] font-black uppercase tracking-tighter transition-colors ${active ? 'text-indigo-950' : 'text-indigo-900/30'}`}>
+        <span className={`text-[8.5px] font-bold uppercase tracking-tight transition-colors ${active ? 'text-indigo-950' : 'text-indigo-900/30'}`}>
           {label}
         </span>
       </button>
@@ -193,26 +193,26 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
       </main>
 
       {/* ── Mobile Bottom Navigation ── */}
-      <div className="md:hidden fixed bottom-6 left-6 right-6 z-[60]">
-        <nav className="bg-white/90 backdrop-blur-2xl border border-indigo-100/50 shadow-2xl rounded-[32px] p-4 flex items-center justify-around">
+      <div className="md:hidden fixed bottom-4 left-4 right-4 z-[60]">
+        <nav className="bg-white/95 backdrop-blur-2xl border border-indigo-50 shadow-xl rounded-2xl py-1.5 px-3 flex items-center justify-around">
           {mobileNavBtn('home', 'Home', Home)}
           {mobileNavBtn('history', 'Library', History)}
           {/* Center FAB — Start Scribing a Sermon */}
-          <div className="relative -top-8 flex flex-col items-center">
+          <div className="relative -top-4 flex flex-col items-center">
             <button 
               onClick={() => onNavigate('new')}
-              className="w-16 h-16 bg-indigo-950 rounded-3xl flex items-center justify-center shadow-xl shadow-indigo-200 border-2 border-amber-200/20 active:scale-95 transition-all"
+              className="w-12 h-12 bg-indigo-950 rounded-full flex items-center justify-center shadow-lg shadow-indigo-950/20 border border-amber-200/20 active:scale-90 hover:scale-105 transition-all"
             >
-               <BookOpen className="w-7 h-7 text-amber-200" />
+               <BookOpen className="w-5 h-5 text-amber-200" />
             </button>
-            <span className="text-[9px] font-black uppercase tracking-tighter text-indigo-900/40 mt-1">Scribe</span>
+            <span className="text-[8.5px] font-black uppercase tracking-tight text-indigo-900/40 mt-0.5">Scribe</span>
           </div>
           {tier === 'free' ? mobileNavBtn('pricing', 'Upgrade', Sparkles) : (
-            <button onClick={() => onNavigate('pricing')} className="flex flex-col items-center justify-center space-y-1">
-              <div className="p-2 rounded-xl text-amber-500">
-                <Crown className="w-5 h-5" />
+            <button onClick={() => onNavigate('pricing')} className="flex flex-col items-center justify-center space-y-0.5 group active:scale-95 transition-transform">
+              <div className="p-1.5 rounded-full text-amber-500 transition-transform duration-300 group-hover:scale-105">
+                <Crown className="w-5 h-5 animate-pulse" />
               </div>
-              <span className="text-[10px] font-black uppercase tracking-tighter text-amber-500">Plan</span>
+              <span className="text-[8.5px] font-bold uppercase tracking-tight text-amber-500">Plan</span>
             </button>
           )}
           {mobileNavBtn('summary', 'Prayer', Heart)}
