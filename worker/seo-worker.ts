@@ -140,7 +140,7 @@ async function handleSermonsAPI(request: Request, env: Env): Promise<Response> {
     // GET /api/sermons — list all sermons
     if (request.method === 'GET' && !sermonId) {
       const { results } = await env.DB.prepare(
-        'SELECT id, title, main_topic, source_type, created_at FROM sermons ORDER BY created_at DESC LIMIT 100'
+        'SELECT id, title, main_topic, source_type, created_at, summary_json FROM sermons ORDER BY created_at DESC LIMIT 100'
       ).all();
       return new Response(JSON.stringify(results), { headers: cors });
     }
