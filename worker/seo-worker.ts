@@ -45,6 +45,8 @@ interface Env {
   STRIPE_WEBHOOK_SECRET: string;
   /** Clerk Secret Key */
   CLERK_SECRET_KEY: string;
+  /** Gemini API Key */
+  GEMINI_API_KEY?: string;
 }
 
 interface SermonKVEntry {
@@ -61,7 +63,11 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    // 1. Handle API Routes (Database)
+    // 1. Handle API Routes (Database & AI Proxy)
+    if (path.startsWith('/v1/') || path.startsWith('/v1beta/')) {
+      return handleGeminiProxyAPI(request, env);
+    }
+
     if (path.startsWith('/api/sermons')) {
       return handleSermonsAPI(request, env);
     }
@@ -448,3 +454,25 @@ function isAssetRequest(path: string): boolean {
   const ext = path.slice(path.lastIndexOf('.'));
   return ASSET_EXTENSIONS.has(ext);
 }
+
+// ── Gemini AI Proxy Handler ────────────────────────────────────────────────────
+
+async function handleGeminiProxyAPI(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const targetUrl = `https://generativelanguage.googleapis.com${url.pathname}${url.search}`;
+  
+  const headers = new Headers(request.headers);
+  headers.set('x-goog-api-key', env.GEMINI_API_KEY || '');
+  headers.delete('host');
+  
+  // Forward request body if method is not GET/HEAD
+  const hasBody = request.method !== 'GET' && request.method !== 'HEAD';
+  const response = await fetch(targetUrl, {
+    method: request.method,
+    headers: headers,
+    body: hasBody ? request.body : undefined,
+  });
+  
+  return response;
+}
+
