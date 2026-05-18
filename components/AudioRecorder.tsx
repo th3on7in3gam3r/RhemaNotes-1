@@ -155,7 +155,19 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({ onStopRecording, o
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-      const mediaRecorder = new MediaRecorder(stream);
+
+      // Safe initialization with ultra-lightweight voice compression (32kbps)
+      let mediaRecorder: MediaRecorder;
+      try {
+        const options = {
+          audioBitsPerSecond: 32000 // Voice is extremely clear at 32kbps but keeps file size extremely lightweight (10MB for 45-min)
+        };
+        mediaRecorder = new MediaRecorder(stream, options);
+      } catch (e) {
+        console.warn('Low-bitrate MediaRecorder not supported, falling back to browser default:', e);
+        mediaRecorder = new MediaRecorder(stream);
+      }
+
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
@@ -169,7 +181,14 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({ onStopRecording, o
         setIsRecording(true);
         setRecordingDuration(0);
         requestWakeLock();
-        startVisualizer(stream);
+        
+        // Isolate visualizer initialization so visualizer exceptions never crash the recording process
+        try {
+          startVisualizer(stream);
+        } catch (visErr) {
+          console.warn('Could not start audio visualizer:', visErr);
+        }
+
         intervalRef.current = window.setInterval(() => {
           setRecordingDuration(prev => prev + 1);
         }, 1000);
@@ -182,14 +201,32 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({ onStopRecording, o
         if (intervalRef.current) {
           window.clearInterval(intervalRef.current);
         }
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        const audioFile = new File([audioBlob], `live-sermon-${Date.now()}.webm`, { type: 'audio/webm' });
-        
-        await onStopRecording('', liveNotesRef.current, audioFile);
-        await clearLiveDraft();
 
-        if (streamRef.current) {
-          streamRef.current.getTracks().forEach(track => track.stop());
+        try {
+          // Dynamic MIME and File Extension resolution for Apple/mobile compatibility
+          const recordedMimeType = mediaRecorder.mimeType || 'audio/webm';
+          
+          // Clean the MIME type by stripping parameters like codecs (Gemini strict format)
+          const baseMimeType = recordedMimeType.split(';')[0].trim();
+          
+          // Map to correct file extension
+          let extension = 'webm';
+          if (baseMimeType.includes('mp4')) extension = 'mp4';
+          else if (baseMimeType.includes('aac')) extension = 'aac';
+          else if (baseMimeType.includes('ogg')) extension = 'ogg';
+          else if (baseMimeType.includes('wav')) extension = 'wav';
+          else if (baseMimeType.includes('mpeg')) extension = 'mp3';
+
+          const audioBlob = new Blob(audioChunksRef.current, { type: baseMimeType });
+          const audioFile = new File([audioBlob], `live-sermon-${Date.now()}.${extension}`, { type: baseMimeType });
+          
+          await onStopRecording('', liveNotesRef.current, audioFile);
+          await clearLiveDraft();
+        } finally {
+          // Guarantee microphone track release to avoid system locking issues
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+          }
         }
       };
 

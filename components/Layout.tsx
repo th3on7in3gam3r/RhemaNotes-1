@@ -102,8 +102,20 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
             className="flex items-center space-x-3 group"
           >
             <div className="relative">
-              <div className="w-10 h-10 rounded-2xl bg-indigo-900 flex items-center justify-center shadow-lg transform transition-transform group-hover:rotate-12">
-                <BookOpen className="w-5 h-5 text-amber-200" />
+              <div className="w-10 h-10 rounded-2xl bg-indigo-900 flex items-center justify-center shadow-lg transform transition-all duration-300 group-hover:rotate-12">
+                <svg className="w-5 h-5 text-amber-200" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  {/* Stylized open book pages */}
+                  <path d="M12 21C12 21 8.5 19 3 19V5C8.5 5 12 7 12 7M12 21C12 21 15.5 19 21 19V5C15.5 5 12 7 12 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  {/* Central elegant cross on the spine */}
+                  <line x1="12" y1="4.5" x2="12" y2="20" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                  <line x1="9" y1="9.5" x2="15" y2="9.5" stroke="currentColor" strokeWidth="2.0" strokeLinecap="round" />
+                  {/* Sound waves inside left page */}
+                  <path d="M6 9.5V14.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round" opacity="0.5" />
+                  <path d="M8 8V16" stroke="currentColor" strokeWidth="1" strokeLinecap="round" opacity="0.8" />
+                  {/* Sound waves inside right page */}
+                  <path d="M16 8V16" stroke="currentColor" strokeWidth="1" strokeLinecap="round" opacity="0.8" />
+                  <path d="M18 9.5V14.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round" opacity="0.5" />
+                </svg>
               </div>
               <Sparkles className="absolute -top-1 -right-1 w-4 h-4 text-amber-400 animate-pulse" />
             </div>

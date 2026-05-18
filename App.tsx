@@ -299,7 +299,17 @@ function App() {
         return (
           <div className="flex flex-col items-center space-y-24 py-12 animate-in fade-in duration-700">
             {/* Hero */}
-            <div className="text-center space-y-8 max-w-3xl">
+            <div className="flex flex-col items-center text-center space-y-8 max-w-3xl">
+              {/* Glowing Hero Logo Container */}
+              <div className="relative group mb-2">
+                <div className="absolute inset-0 rounded-[2.5rem] bg-gradient-to-tr from-indigo-500/20 to-amber-500/20 blur-2xl group-hover:scale-110 transition-transform duration-500 opacity-80" />
+                <img 
+                  src="/logo.png" 
+                  alt="RhemaNotes Logo" 
+                  className="relative w-28 h-28 rounded-[2.5rem] shadow-2xl border border-indigo-50 group-hover:scale-105 transition-transform duration-300 z-10"
+                />
+              </div>
+
               <div className="inline-flex items-center space-x-2 bg-white px-4 py-2 rounded-full shadow-sm border border-indigo-50">
                 <Sparkles className="w-4 h-4 text-amber-500" />
                 <span className="text-xs font-bold text-indigo-900/60 tracking-wider uppercase">AI-Illuminated Sermon Study</span>

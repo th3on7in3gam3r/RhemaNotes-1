@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <!-- Safe zone background for maskable adaptive formats -->
+  <rect width="512" height="512" fill="#1e1b4b"/>
+  <!-- Central glowing brand insignia -->
+  <g transform="translate(106, 106) scale(1.25)">
+    <!-- Stylized book scriptures -->
+    <path d="M120 210C120 210 85 190 30 190V50C85 50 120 70 120 70M120 210C120 210 155 190 210 190V50C155 50 120 70 120 70" fill="none" stroke="#f59e0b" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- Sacred Cross -->
+    <line x1="120" y1="40" x2="120" y2="200" stroke="#f59e0b" stroke-width="18" stroke-linecap="round"/>
+    <line x1="85" y1="95" x2="155" y2="95" stroke="#f59e0b" stroke-width="14" stroke-linecap="round"/>
+    <!-- Voice Sound Waves (Left) -->
+    <line x1="60" y1="95" x2="60" y2="145" stroke="#f59e0b" stroke-width="6" stroke-linecap="round" opacity="0.6"/>
+    <line x1="80" y1="80" x2="80" y2="160" stroke="#f59e0b" stroke-width="6" stroke-linecap="round" opacity="0.9"/>
+    <!-- Voice Sound Waves (Right) -->
+    <line x1="160" y1="80" x2="160" y2="160" stroke="#f59e0b" stroke-width="6" stroke-linecap="round" opacity="0.9"/>
+    <line x1="180" y1="95" x2="180" y2="145" stroke="#f59e0b" stroke-width="6" stroke-linecap="round" opacity="0.6"/>
+  </g>
+</svg>
