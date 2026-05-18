@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { History, Home, BookOpen, Moon, Sun, Sparkles, MessageCircle, Heart, Crown } from 'lucide-react';
+import { History, Home, BookOpen, Moon, Sun, Sparkles, MessageCircle, Heart, Crown, User } from 'lucide-react';
 import { Show, SignInButton, SignUpButton, UserButton } from '@clerk/react';
 import logoImg from '../logo.png';
 
@@ -120,7 +120,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
           {/* Desktop Nav */}
           <nav className="hidden md:flex items-center bg-white/50 p-1.5 rounded-[20px] border border-indigo-50/50 shadow-sm">
             {navBtn('home',    'Home',    Home)}
-            {navBtn('history', 'Dashboard', History)}
+            {navBtn('history', 'Library', History)}
             {/* Show Upgrade only for free users; pro/church get a tier badge */}
             {tier === 'free' && navBtn('pricing', 'Upgrade', Sparkles)}
             {tier === 'pro' && (
@@ -168,7 +168,18 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
               </SignUpButton>
             </Show>
             <Show when="signed-in">
-              <UserButton />
+              <div className="flex items-center bg-white/50 p-1.5 rounded-[20px] border border-indigo-50/50 shadow-sm space-x-1">
+                <button 
+                  onClick={() => onNavigate('profile')} 
+                  className={`flex items-center space-x-2 px-4 py-2 rounded-2xl text-sm font-bold transition-all ${currentScreen === 'profile' ? 'bg-amber-100 text-amber-900 shadow-sm' : 'text-indigo-900/50 hover:text-indigo-900 hover:bg-indigo-50/50'}`}
+                >
+                  <User className={`w-4 h-4 ${currentScreen === 'profile' ? 'text-amber-600' : ''}`} />
+                  <span>Dashboard</span>
+                </button>
+                <div className="px-2">
+                  <UserButton />
+                </div>
+              </div>
             </Show>
           </nav>
 
@@ -208,7 +219,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
       <div className="md:hidden fixed bottom-4 left-4 right-4 z-[60]">
         <nav className="bg-white/95 backdrop-blur-2xl border border-indigo-50 shadow-xl rounded-2xl py-1.5 px-3 flex items-center justify-around">
           {mobileNavBtn('home', 'Home', Home)}
-          {mobileNavBtn('history', 'Dashboard', History)}
+          {mobileNavBtn('history', 'Library', History)}
           {/* Center FAB — Start Scribing a Sermon (Opens live recording) */}
           <div className="relative -top-4 flex flex-col items-center">
             <button 
@@ -228,7 +239,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
               <span className="text-[8.5px] font-bold uppercase tracking-tight text-amber-500">Plan</span>
             </button>
           )}
-          {mobileNavBtn('summary', 'Prayer', Heart)}
+          {mobileNavBtn('profile', 'Dashboard', User)}
         </nav>
       </div>
 

@@ -7,6 +7,7 @@ import { SermonHistory } from './components/SermonHistory';
 import { Pricing } from './components/Pricing';
 import { PaymentSuccess } from './components/PaymentSuccess';
 import { TermsOfService, PrivacyPolicy } from './components/LegalPages';
+import { UserProfile } from './components/UserProfile';
 import { useSubscription } from './hooks/useSubscription';
 import { Onboarding } from './components/Onboarding';
 import { processSermonTranscript, processSermonFile, processSermonYoutubeUrl } from './services/geminiService';
@@ -24,7 +25,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useUser } from '@clerk/react';
 import logoImg from './logo.png';
 
-type AppScreen = 'home' | 'listening' | 'summary' | 'upload' | 'history' | 'youtube' | 'pricing' | 'success' | 'terms' | 'privacy';
+type AppScreen = 'home' | 'listening' | 'summary' | 'upload' | 'history' | 'youtube' | 'pricing' | 'success' | 'terms' | 'privacy' | 'profile';
 
 // ── Processing overlay ────────────────────────────────────────────────────────
 
@@ -285,6 +286,10 @@ function App() {
     setError(null);
     setIncludeReflection(false);
     setPageMeta(HOME_META);
+  }, []);
+
+  const handleManageSubscription = useCallback(() => {
+    setCurrentScreen('pricing');
   }, []);
 
   const handleNavigate = useCallback((screen: AppScreen) => {
@@ -590,6 +595,19 @@ function App() {
 
       case 'privacy':
         return <PrivacyPolicy onBack={handleGoHome} />;
+
+      case 'profile':
+        return (
+          <UserProfile
+            onBack={handleGoHome}
+            tier={tier}
+            onManageSubscription={handleManageSubscription}
+            stats={{
+              totalScribes: history.length,
+              favorites: history.filter(h => h.is_favorite).length
+            }}
+          />
+        );
 
       default:
         return null;
