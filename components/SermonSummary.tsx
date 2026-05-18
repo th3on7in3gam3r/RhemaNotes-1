@@ -110,9 +110,9 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
   const renderResourceContent = () => {
     switch (activeResource) {
       case 'transcript': return <TranscriptTab summary={currentSummary} onUpdateSummary={handleUpdateSummarization} />;
-      case 'notes':      return <NotesTab summary={currentSummary} onUpdateSummary={handleUpdateSummarization} onOpenInBible={openInBible} />;
+      case 'notes':      return <ApplyTab summary={currentSummary} />;
       case 'study':      return <StudySystem summary={currentSummary} onUpdateSummary={handleUpdateSummarization} />;
-      case 'apply':      return <ApplyTab summary={currentSummary} />;
+      case 'apply':      return <NotesTab summary={currentSummary} onUpdateSummary={handleUpdateSummarization} onOpenInBible={openInBible} />;
       default:           return null;
     }
   };

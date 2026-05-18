@@ -26,8 +26,8 @@ export const StudySystem: React.FC<StudySystemProps> = ({ summary, onUpdateSumma
 
   const renderTool = () => {
     switch (activeTool) {
-      case 'quiz':       return summary.quiz       ? <Quiz questions={summary.quiz} />         : <NoData tool="Quiz" />;
-      case 'flashcards': return summary.flashcards ? <Flashcards cards={summary.flashcards} /> : <NoData tool="Flashcards" />;
+      case 'quiz':       return summary.quiz?.length       ? <Quiz questions={summary.quiz} />         : <NoData tool="Quiz" />;
+      case 'flashcards': return summary.flashcards?.length ? <Flashcards cards={summary.flashcards} /> : <NoData tool="Flashcards" />;
       case 'mindmap':    return summary.mind_map   ? <MindMap data={summary.mind_map} />       : <NoData tool="Mind Map" />;
       case 'chat':       return <SermonChat summary={summary} onUpdateSummary={onUpdateSummary} />;
       default:           return null;
