@@ -499,17 +499,17 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
       </div>
 
       {/* ── Sidebar (Chat & Bible) ── */}
-      <div className="w-full lg:w-[460px] flex-shrink-0 flex flex-col gap-8">
+      <div className="w-full lg:w-[460px] flex-shrink-0 flex flex-col gap-6 lg:self-start lg:sticky lg:top-8 z-40">
         
         {/* Divine Sidebar Toggle */}
-        <div className="flex bg-indigo-50/50 p-2 rounded-3xl border border-indigo-100 shadow-inner">
+        <div className="flex bg-indigo-50/50 dark:bg-slate-800 p-2 rounded-3xl border border-indigo-100 dark:border-slate-800 shadow-inner">
           <button
             onClick={() => setSidebarView('chat')}
             className={`
               flex-1 flex items-center justify-center space-x-2 py-4 text-sm font-black rounded-2xl transition-all duration-500
               ${sidebarView === 'chat' 
-                ? 'bg-white text-indigo-900 shadow-xl shadow-indigo-100' 
-                : 'text-indigo-900/40 hover:text-indigo-900'}
+                ? 'bg-white dark:bg-slate-900 text-indigo-900 dark:text-white shadow-xl shadow-indigo-100 dark:shadow-none' 
+                : 'text-indigo-900/40 dark:text-slate-400 hover:text-indigo-900 dark:hover:text-white'}
             `}
           >
             <MessageSquare className="w-4 h-4" />
@@ -520,8 +520,8 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
             className={`
               flex-1 flex items-center justify-center space-x-2 py-4 text-sm font-black rounded-2xl transition-all duration-500
               ${sidebarView === 'bible' 
-                ? 'bg-white text-indigo-900 shadow-xl shadow-indigo-100' 
-                : 'text-indigo-900/40 hover:text-indigo-900'}
+                ? 'bg-white dark:bg-slate-900 text-indigo-900 dark:text-white shadow-xl shadow-indigo-100 dark:shadow-none' 
+                : 'text-indigo-900/40 dark:text-slate-400 hover:text-indigo-900 dark:hover:text-white'}
             `}
           >
             <Book className="w-4 h-4" />
@@ -530,7 +530,7 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
         </div>
 
         {/* Divine Content Container */}
-        <div className="flex-1 bg-white rounded-[40px] border border-indigo-50 shadow-2xl shadow-indigo-100/50 overflow-hidden min-h-[700px] flex flex-col">
+        <div className="bg-white dark:bg-slate-900 rounded-[40px] border border-indigo-50 dark:border-slate-800 shadow-2xl shadow-indigo-100/50 dark:shadow-none overflow-hidden h-[580px] flex flex-col">
           <AnimatePresence mode="wait">
             <motion.div
               key={sidebarView}
