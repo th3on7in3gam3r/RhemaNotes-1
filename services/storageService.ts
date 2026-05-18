@@ -2,6 +2,7 @@ import localforage from 'localforage';
 import { SermonHistoryItem, SermonSummaryOutput, UserNote } from '../types';
 
 const STORAGE_KEY = 'spiritscribe_history';
+const PENDING_SYNC_KEY = 'spiritscribe_pending_sync';
 const API_BASE = '/api/sermons';
 
 // Configure localforage to use IndexedDB primarily
@@ -11,7 +12,62 @@ localforage.config({
   description: 'Stores generated sermon histories and transcripts'
 });
 
-export const saveSermonToHistory = async (summary: SermonSummaryOutput, userId: string = 'guest'): Promise<SermonHistoryItem> => {
+// ── Pending sync queue ────────────────────────────────────────────────────────
+// Items that failed to POST to D1 are queued here and retried on next load.
+
+interface PendingSyncItem {
+  id: string;
+  userId: string;
+  payload: object;
+}
+
+const getPendingSyncQueue = async (): Promise<PendingSyncItem[]> => {
+  return (await localforage.getItem<PendingSyncItem[]>(PENDING_SYNC_KEY)) || [];
+};
+
+const addToPendingSyncQueue = async (item: PendingSyncItem): Promise<void> => {
+  const queue = await getPendingSyncQueue();
+  // Avoid duplicates — replace if already queued
+  const filtered = queue.filter(q => q.id !== item.id);
+  await localforage.setItem(PENDING_SYNC_KEY, [...filtered, item]);
+};
+
+const removeFromPendingSyncQueue = async (id: string): Promise<void> => {
+  const queue = await getPendingSyncQueue();
+  await localforage.setItem(PENDING_SYNC_KEY, queue.filter(q => q.id !== id));
+};
+
+/**
+ * Retry any items that failed to POST to D1 on a previous session.
+ * Called at the start of getSermonHistory so it runs automatically on every load.
+ */
+const flushPendingSyncQueue = async (): Promise<void> => {
+  const queue = await getPendingSyncQueue();
+  if (queue.length === 0) return;
+
+  for (const item of queue) {
+    try {
+      const res = await fetch(API_BASE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(item.payload),
+      });
+      if (res.ok || res.status === 409) {
+        // 409 = already exists (duplicate), safe to remove from queue
+        await removeFromPendingSyncQueue(item.id);
+      }
+    } catch {
+      // Still offline — leave in queue for next attempt
+    }
+  }
+};
+
+// ── Save ──────────────────────────────────────────────────────────────────────
+
+export const saveSermonToHistory = async (
+  summary: SermonSummaryOutput,
+  userId: string = 'guest'
+): Promise<SermonHistoryItem> => {
   const newItem: SermonHistoryItem = {
     id: crypto.randomUUID(),
     timestamp: Date.now(),
@@ -19,34 +75,48 @@ export const saveSermonToHistory = async (summary: SermonSummaryOutput, userId: 
     user_id: userId,
   };
 
-  // 1. Save locally first (Instant feedback & Offline support)
-  const history = await getSermonHistory(userId);
-  const updatedHistory = [newItem, ...history];
-  await localforage.setItem(STORAGE_KEY, updatedHistory);
+  // 1. Save locally first (instant feedback & offline support)
+  const history = await localforage.getItem<SermonHistoryItem[]>(STORAGE_KEY) || [];
+  await localforage.setItem(STORAGE_KEY, [newItem, ...history]);
 
   // 2. Attempt to sync to Cloudflare D1
+  const d1Payload = {
+    id: newItem.id,
+    user_id: userId,
+    title: summary.title,
+    main_topic: summary.main_topic,
+    clean_transcript: summary.clean_transcript,
+    source_type: 'text',
+    summary_json: JSON.stringify(summary),
+  };
+
   try {
-    await fetch(API_BASE, {
+    const res = await fetch(API_BASE, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: newItem.id,
-        user_id: userId,
-        title: summary.title,
-        main_topic: summary.main_topic,
-        clean_transcript: summary.clean_transcript,
-        source_type: 'text', // Logic to determine type can be added here
-        summary_json: JSON.stringify(summary)
-      })
+      body: JSON.stringify(d1Payload),
     });
+
+    if (!res.ok) {
+      // D1 rejected the write — queue for retry
+      console.warn(`D1 POST failed (${res.status}), queuing for retry.`);
+      await addToPendingSyncQueue({ id: newItem.id, userId, payload: d1Payload });
+    }
   } catch (e) {
-    console.warn('D1 Sync failed, item remains in local storage.', e);
+    // Network error — queue for retry
+    console.warn('D1 POST network error, queuing for retry.', e);
+    await addToPendingSyncQueue({ id: newItem.id, userId, payload: d1Payload });
   }
-  
+
   return newItem;
 };
 
+// ── Load ──────────────────────────────────────────────────────────────────────
+
 export const getSermonHistory = async (userId: string = 'guest'): Promise<SermonHistoryItem[]> => {
+  // Retry any previously failed POSTs before fetching
+  await flushPendingSyncQueue();
+
   // 1. Load current local cache first to prevent any data loss
   const localHistory = await localforage.getItem<SermonHistoryItem[]>(STORAGE_KEY) || [];
   const localMap = new Map(localHistory.map(item => [item.id, item]));
@@ -54,31 +124,35 @@ export const getSermonHistory = async (userId: string = 'guest'): Promise<Sermon
   try {
     // 2. Fetch from cloud with userId parameter to enforce creator isolation and bust cache
     const response = await fetch(`${API_BASE}?userId=${userId}&t=${Date.now()}`, {
-      headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+      headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
     });
+
     if (response.ok) {
       const cloudSermons: any[] = await response.json();
-      
+
       // Map D1 rows back to SermonHistoryItem format
       const formatted: SermonHistoryItem[] = cloudSermons.map(s => {
-        // If we already have this sermon cached locally with detailed insights, preserve them!
+        // Parse cloud summary_json once, used in both branches below
+        let parsedCloudSummary: SermonSummaryOutput | null = null;
+        if (s.summary_json) {
+          try {
+            parsedCloudSummary = JSON.parse(s.summary_json);
+          } catch {}
+        }
+
         if (localMap.has(s.id)) {
           const localItem = localMap.get(s.id)!;
-          
-          let parsedCloudSummary: SermonSummaryOutput | null = null;
-          if (s.summary_json) {
-            try {
-              parsedCloudSummary = JSON.parse(s.summary_json);
-            } catch {}
-          }
 
           const localScripturesCount = localItem.summary.scriptures?.length ?? 0;
           const cloudScripturesCount = parsedCloudSummary?.scriptures?.length ?? 0;
 
-          // If the D1 cloud database contains scriptures while local cache has 0, auto-heal and restore!
-          const mergedSummary = (cloudScripturesCount > localScripturesCount && parsedCloudSummary)
-            ? parsedCloudSummary
-            : localItem.summary;
+          // Prefer whichever source has more scriptures.
+          // If local is empty (e.g. after a hard refresh cleared IndexedDB) and
+          // cloud has the full data, restore from cloud automatically.
+          const mergedSummary =
+            cloudScripturesCount > localScripturesCount && parsedCloudSummary
+              ? parsedCloudSummary
+              : localItem.summary;
 
           return {
             ...localItem,
@@ -88,56 +162,39 @@ export const getSermonHistory = async (userId: string = 'guest'): Promise<Sermon
               ...mergedSummary,
               title: s.title || mergedSummary.title,
               main_topic: s.main_topic || mergedSummary.main_topic,
-              clean_transcript: s.clean_transcript || mergedSummary.clean_transcript
-            }
+              clean_transcript: s.clean_transcript || mergedSummary.clean_transcript,
+            },
           };
         }
 
-        // If we don't have it locally, attempt to parse the full summary_json from D1
-        let parsedSummary: SermonSummaryOutput;
-        if (s.summary_json) {
-          try {
-            parsedSummary = JSON.parse(s.summary_json);
-          } catch {
-            parsedSummary = {
-              title: s.title,
-              main_topic: s.main_topic,
-              clean_transcript: s.clean_transcript,
-              scriptures: [],
-              key_points: [],
-              quotes: [],
-              applications: [],
-              open_questions: [],
-              actionable_insights: [],
-            };
-          }
-        } else {
-          parsedSummary = {
-            title: s.title,
-            main_topic: s.main_topic,
-            clean_transcript: s.clean_transcript,
-            scriptures: [],
-            key_points: [],
-            quotes: [],
-            applications: [],
-            open_questions: [],
-            actionable_insights: [],
-          };
-        }
+        // Not in local cache — use cloud summary_json if available.
+        // Fall back to a minimal object only when summary_json is truly absent.
+        const parsedSummary: SermonSummaryOutput = parsedCloudSummary ?? {
+          title: s.title,
+          main_topic: s.main_topic,
+          clean_transcript: s.clean_transcript,
+          scriptures: [],
+          key_points: [],
+          quotes: [],
+          applications: [],
+          open_questions: [],
+          actionable_insights: [],
+        };
 
         return {
           id: s.id,
           timestamp: new Date(s.created_at).getTime(),
           user_id: s.user_id,
-          summary: parsedSummary
+          summary: parsedSummary,
         };
       });
 
-      // 3. Update local cache with merged list
-      // Preserve local items that are not yet in the cloud (offline creations or delayed syncs)
+      // 3. Preserve local-only items (offline creations / delayed syncs)
       const cloudIds = new Set(cloudSermons.map(s => s.id));
-      const localOnly = localHistory.filter(item => !cloudIds.has(item.id) && (!item.user_id || item.user_id === userId));
-      
+      const localOnly = localHistory.filter(
+        item => !cloudIds.has(item.id) && (!item.user_id || item.user_id === userId)
+      );
+
       const merged = [...formatted, ...localOnly].sort((a, b) => b.timestamp - a.timestamp);
 
       if (merged.length > 0) {
@@ -149,58 +206,79 @@ export const getSermonHistory = async (userId: string = 'guest'): Promise<Sermon
     console.warn('D1 fetch failed, falling back to local storage.', e);
   }
 
-  // 4. Fallback to local storage (filtering by user locally if loaded without internet)
+  // 4. Fallback to local storage
   return localHistory.filter(item => !item.user_id || item.user_id === userId);
 };
 
+// ── Delete ────────────────────────────────────────────────────────────────────
+
 export const deleteSermonFromHistory = async (id: string, userId: string = 'guest'): Promise<void> => {
   // 1. Remove locally
-  const history = await getSermonHistory(userId);
-  const updatedHistory = history.filter(item => item.id !== id);
-  await localforage.setItem(STORAGE_KEY, updatedHistory);
+  const history = await localforage.getItem<SermonHistoryItem[]>(STORAGE_KEY) || [];
+  await localforage.setItem(STORAGE_KEY, history.filter(item => item.id !== id));
 
-  // 2. Remove from cloud with creator security header and query string
+  // 2. Remove from cloud
   try {
-    await fetch(`${API_BASE}/${id}?userId=${userId}`, { 
+    await fetch(`${API_BASE}/${id}?userId=${userId}`, {
       method: 'DELETE',
-      headers: { 'X-User-Id': userId }
+      headers: { 'X-User-Id': userId },
     });
   } catch (e) {
     console.warn('D1 Delete failed, sync will happen later.', e);
   }
 };
 
-export const updateSermonInHistory = async (id: string, summary: SermonSummaryOutput, userId: string = 'guest'): Promise<void> => {
-  // 1. Update locally
-  const history = await getSermonHistory(userId);
-  const updatedHistory = history.map(item => 
+// ── Update ────────────────────────────────────────────────────────────────────
+
+/**
+ * Updates a sermon in both local storage and D1.
+ * Returns `true` if the D1 PATCH succeeded, `false` if it failed (local update
+ * always happens regardless so the UI stays consistent).
+ */
+export const updateSermonInHistory = async (
+  id: string,
+  summary: SermonSummaryOutput,
+  userId: string = 'guest'
+): Promise<boolean> => {
+  // 1. Update locally — always succeeds, keeps UI in sync
+  const history = await localforage.getItem<SermonHistoryItem[]>(STORAGE_KEY) || [];
+  const updatedHistory = history.map(item =>
     item.id === id ? { ...item, summary } : item
   );
   await localforage.setItem(STORAGE_KEY, updatedHistory);
 
-  // 2. Update in cloud with creator security header and query string
+  // 2. Update in cloud
   try {
-    await fetch(`${API_BASE}/${id}?userId=${userId}`, {
+    const res = await fetch(`${API_BASE}/${id}?userId=${userId}`, {
       method: 'PATCH',
-      headers: { 
+      headers: {
         'Content-Type': 'application/json',
-        'X-User-Id': userId 
+        'X-User-Id': userId,
       },
       body: JSON.stringify({
         title: summary.title,
         main_topic: summary.main_topic,
         clean_transcript: summary.clean_transcript,
-        summary_json: JSON.stringify(summary)
-      })
+        summary_json: JSON.stringify(summary),
+      }),
     });
+
+    if (!res.ok) {
+      console.warn(`D1 PATCH failed (${res.status}) for sermon ${id}.`);
+      return false;
+    }
+
+    return true;
   } catch (e) {
-    console.warn('D1 Update failed.', e);
+    console.warn('D1 PATCH network error.', e);
+    return false;
   }
 };
 
 // ── Live Drafts (Local Only) ──────────────────────────────────────────────────
 
 const DRAFT_KEY = 'spiritscribe_live_draft';
+
 export const saveLiveDraft = async (notes: UserNote[]): Promise<void> => {
   await localforage.setItem(DRAFT_KEY, notes);
 };

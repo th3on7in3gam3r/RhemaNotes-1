@@ -259,17 +259,41 @@ function App() {
   }, []);
 
   const handleToggleReflection = useCallback(() => setIncludeReflection(p => !p), []);
-  const handleUpdateHistory = useCallback(async () => {
-    const newHistory = await getSermonHistory(user?.id || 'guest');
-    setHistory(newHistory);
-    
-    // Sync the currently selected sermon summary so UI updates (e.g. likes/hearts) persist
-    if (selectedHistoryId) {
-      const updatedSermon = newHistory.find(h => h.id === selectedHistoryId);
-      if (updatedSermon) {
-        setSermonOutput(updatedSermon.summary);
-      }
+
+  /**
+   * Called by SermonSummary after any in-place update (likes, journal, notes, etc.).
+   *
+   * We receive the already-updated summary directly so we can apply it to both
+   * `sermonOutput` and `history` immediately — no round-trip to D1 required.
+   * This prevents a failed PATCH from overwriting the optimistic UI state.
+   *
+   * A background re-fetch still runs to pick up any other changes, but it will
+   * NOT overwrite the summary we just received.
+   */
+  const handleUpdateHistory = useCallback(async (updatedSummary?: SermonSummaryOutput) => {
+    // 1. Apply the optimistic update instantly if we have the new summary
+    if (updatedSummary && selectedHistoryId) {
+      setSermonOutput(updatedSummary);
+      setHistory(prev =>
+        prev.map(h => h.id === selectedHistoryId ? { ...h, summary: updatedSummary } : h)
+      );
     }
+
+    // 2. Background sync from D1 to pick up any other changes.
+    //    We intentionally do NOT overwrite sermonOutput here — the optimistic
+    //    state above is the source of truth until the next full navigation.
+    getSermonHistory(user?.id || 'guest').then(newHistory => {
+      setHistory(prev => {
+        // Merge: keep the optimistic summary for the currently-open sermon,
+        // update everything else from the fresh cloud data.
+        return newHistory.map(h => {
+          if (h.id === selectedHistoryId && updatedSummary) {
+            return { ...h, summary: updatedSummary };
+          }
+          return h;
+        });
+      });
+    });
   }, [user, selectedHistoryId]);
 
   const handleDeleteItem = async (id: string) => {
@@ -550,6 +574,7 @@ function App() {
             activeUserId={user?.id || 'guest'}
             creatorId={history.find(h => h.id === selectedHistoryId)?.user_id}
           />
+
         ) : (
           <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
             <p className="text-indigo-900/40 font-serif text-lg mb-6 italic">No sermon journey available.</p>

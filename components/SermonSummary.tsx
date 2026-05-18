@@ -23,7 +23,9 @@ interface SermonSummaryProps {
   onToggleReflection: () => void;
   isLoading: boolean;
   historyId?: string;
-  onUpdateHistory?: () => void;
+  /** Called after any in-place update. Receives the new summary so the parent
+   *  can apply it optimistically without a D1 round-trip. */
+  onUpdateHistory?: (updatedSummary: SermonSummaryOutput) => void;
   activeUserId?: string;
   creatorId?: string;
 }
@@ -96,7 +98,9 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
     if (historyId) {
       // Pass activeUserId so the backend can enforce creator-only writes
       await updateSermonInHistory(historyId, updated, activeUserId || 'guest');
-      onUpdateHistory?.();
+      // Pass the updated summary directly so the parent can apply it
+      // optimistically — no D1 re-fetch needed to keep the UI in sync.
+      onUpdateHistory?.(updated);
     }
   }, [historyId, onUpdateHistory, activeUserId]);
 
