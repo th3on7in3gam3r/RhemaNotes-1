@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { History, Home, BookOpen, Moon, Sun, Sparkles, MessageCircle, Heart, Crown } from 'lucide-react';
-import { Show, SignInButton, SignUpButton, UserButton } from '@clerk/react';
+import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton } from '@clerk/react';
 import logoImg from '../logo.png';
 
 interface LayoutProps {
@@ -155,7 +155,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
             <div className="w-px h-5 bg-indigo-100 mx-2" />
 
             {/* Clerk Auth */}
-            <Show when="signed-out">
+            <SignedOut>
               <SignInButton mode="modal">
                 <button className="px-4 py-2 text-sm font-bold text-indigo-900/60 hover:text-indigo-900 hover:bg-indigo-50 rounded-xl transition-all">
                   Sign In
@@ -166,10 +166,10 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
                   Sign Up
                 </button>
               </SignUpButton>
-            </Show>
-            <Show when="signed-in">
+            </SignedOut>
+            <SignedIn>
               <UserButton />
-            </Show>
+            </SignedIn>
           </nav>
 
           {/* Mobile Actions: Clerk Auth & Theme Toggle */}
@@ -182,16 +182,16 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
               {dark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
             <div className="w-px h-4 bg-indigo-100/80" />
-            <Show when="signed-out">
+            <SignedOut>
               <SignInButton mode="modal">
                 <button className="px-3 py-1.5 text-xs font-black bg-indigo-950 text-amber-100 rounded-xl hover:bg-indigo-900 active:scale-95 transition-all shadow-md">
                   Sign In
                 </button>
               </SignInButton>
-            </Show>
-            <Show when="signed-in">
+            </SignedOut>
+            <SignedIn>
               <UserButton afterSignOutUrl="/" />
-            </Show>
+            </SignedIn>
           </div>
         </div>
       </header>

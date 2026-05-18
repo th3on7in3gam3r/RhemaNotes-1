@@ -83,6 +83,13 @@ export default {
     if (path === '/sitemap.xml') return new Response(await generateSitemap(env), { headers: { 'content-type': 'application/xml' } });
 
     // 3. Serve static assets (JS, CSS, Images, Icons)
+    if (!env.ASSETS) {
+      return new Response(
+        "Static assets binding (ASSETS) is undefined. Please verify that compatibility_date in wrangler.toml is set to a modern date like '2024-11-01' or later.", 
+        { status: 500 }
+      );
+    }
+
     try {
       const asset = await env.ASSETS.fetch(request.clone());
       if (asset.ok || isAssetRequest(path)) {
