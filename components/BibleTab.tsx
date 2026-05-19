@@ -109,17 +109,22 @@ const VerseModal: React.FC<VerseModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden border border-blue-100">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden border border-blue-100">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 bg-blue-900 text-white rounded-t-3xl">
+        <div className="flex items-center justify-between px-6 py-4 bg-blue-900 text-white rounded-t-3xl flex-shrink-0">
           <div className="flex items-center space-x-3">
             <BookOpen className="w-6 h-6" />
             <h2 className="text-xl font-extrabold">{reference}</h2>
           </div>
-          <button onClick={onClose} className="hover:bg-blue-700 rounded-full p-1 transition-colors">
+          {/* Always-visible close button — works on both desktop and mobile */}
+          <button
+            onClick={onClose}
+            className="w-9 h-9 flex items-center justify-center bg-blue-700 hover:bg-blue-600 active:bg-blue-500 rounded-full transition-colors"
+            aria-label="Close"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
