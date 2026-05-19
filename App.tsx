@@ -10,9 +10,10 @@ import { TermsOfService, PrivacyPolicy } from './components/LegalPages';
 import { UserProfile } from './components/UserProfile';
 import { useSubscription } from './hooks/useSubscription';
 import { Onboarding } from './components/Onboarding';
-import { processSermonTranscript, processSermonFile, processSermonYoutubeUrl } from './services/geminiService';
+import { processSermonTranscript, processSermonFile } from './services/geminiService';
 import { getSermonHistory, saveSermonToHistory, deleteSermonFromHistory, claimGuestSermons } from './services/storageService';
 import { getSavedScriptures } from './services/storageService';
+import { getYouTubeTranscript } from './services/youtubeService';
 import { setPageMeta, HOME_META, HISTORY_META } from './services/seoService';
 import { SermonSummaryOutput, SermonHistoryItem, UserNote, SavedScripture } from './types';
 import { DEMO_SERMON } from './demoSermon';
@@ -528,13 +529,20 @@ function App() {
             onProcessUrl={async (url) => {
               setIsLoading(true);
               setError(null);
-              setYoutubeStep('Sourcing and illuminating YouTube sermon…');
               try {
-                const result = await processSermonYoutubeUrl(url, includeReflection);
-                if (!result.title || result.title === 'Sermon Summary') {
+                setYoutubeStep('Downloading YouTube Transcript...');
+                const ytResult = await getYouTubeTranscript(url);
+
+                setYoutubeStep('Sourcing and illuminating YouTube sermon…');
+                const result = await processSermonTranscript(ytResult.transcript, includeReflection);
+
+                if (ytResult.title && (!result.title || result.title === 'Sermon Summary')) {
+                  result.title = ytResult.title;
+                } else if (!result.title) {
                   result.title = 'YouTube Sermon Study';
                 }
-                const savedItem = await saveSermonToHistory(result);
+                
+                const savedItem = await saveSermonToHistory(result, user?.id || 'guest');
                 setHistory(prev => [savedItem, ...prev]);
                 setSermonOutput(result);
                 setSelectedHistoryId(savedItem.id);

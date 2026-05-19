@@ -146,15 +146,6 @@ export async function processSermonFile(
   ], includeReflection);
 }
 
-export async function processSermonYoutubeUrl(
-  url: string,
-  includeReflection: boolean,
-): Promise<SermonSummaryOutput> {
-  // Use a refined prompt for YouTube that asks Gemini to use its internal grounding if possible
-  const prompt = `Please process the following YouTube sermon: ${url}. 
-  ${MASTER_SERMON_PROCESSING_PROMPT("the provided YouTube link", includeReflection)}`;
-  return callGemini([{ text: prompt }], includeReflection);
-}
 
 async function callGemini(parts: any[], includeReflection: boolean): Promise<SermonSummaryOutput> {
   try {
