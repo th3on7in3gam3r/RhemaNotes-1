@@ -12,8 +12,9 @@ import { useSubscription } from './hooks/useSubscription';
 import { Onboarding } from './components/Onboarding';
 import { processSermonTranscript, processSermonFile, processSermonYoutubeUrl } from './services/geminiService';
 import { getSermonHistory, saveSermonToHistory, deleteSermonFromHistory, claimGuestSermons } from './services/storageService';
+import { getSavedScriptures } from './services/storageService';
 import { setPageMeta, HOME_META, HISTORY_META } from './services/seoService';
-import { SermonSummaryOutput, SermonHistoryItem, UserNote } from './types';
+import { SermonSummaryOutput, SermonHistoryItem, UserNote, SavedScripture } from './types';
 import { DEMO_SERMON } from './demoSermon';
 import {
   BookOpen, Mic, Upload, FileAudio, FileVideo,
@@ -160,6 +161,7 @@ function App() {
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
   const [includeReflection, setIncludeReflection] = useState(false);
   const [history, setHistory] = useState<SermonHistoryItem[]>([]);
+  const [savedScriptures, setSavedScriptures] = useState<SavedScripture[]>(() => getSavedScriptures());
   const [initialUploadMode, setInitialUploadMode] = useState<'text' | 'file'>('text');
   const [youtubeStep, setYoutubeStep] = useState<string | undefined>();
   
@@ -654,9 +656,10 @@ function App() {
             onBack={handleGoHome}
             tier={tier}
             onManageSubscription={handleManageSubscription}
+            savedScriptures={savedScriptures}
+            onScripturesChange={() => setSavedScriptures(getSavedScriptures())}
             stats={{
               totalScribes: history.length,
-              favorites: 0
             }}
           />
         );

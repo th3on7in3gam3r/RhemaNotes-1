@@ -67,7 +67,16 @@ export interface SermonSummaryOutput {
   mind_map?: MindMapNode;
   chat_history?: ChatMessage[];
   audio_blob?: Blob;
-  liked?: boolean;
+}
+
+export interface SavedScripture {
+  id: string;           // unique save ID
+  reference: string;    // e.g. "John 3:16"
+  plain_meaning: string;
+  speaker_usage: string;
+  sermonId: string;
+  sermonTitle: string;
+  savedAt: number;      // timestamp
 }
 
 export interface SermonHistoryItem {

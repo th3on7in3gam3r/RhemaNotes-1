@@ -10,27 +10,37 @@ import {
   ChevronLeft, 
   Sparkles, 
   BookOpen, 
-  Heart,
+  Bookmark,
   ShieldCheck,
-  Zap
+  Zap,
+  Trash2,
+  BookMarked
 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { SavedScripture } from '../types';
+import { removeSavedScripture } from '../services/storageService';
 
 interface UserProfileProps {
   onBack: () => void;
   tier: string;
   stats: {
     totalScribes: number;
-    favorites: number;
   };
+  savedScriptures: SavedScripture[];
+  onScripturesChange: () => void;
   onManageSubscription: () => void;
 }
 
 export const UserProfile: React.FC<UserProfileProps> = ({ 
-  onBack, tier, stats, onManageSubscription 
+  onBack, tier, stats, savedScriptures, onScripturesChange, onManageSubscription 
 }) => {
   const { user } = useUser();
   const { signOut } = useClerk();
+
+  const handleRemoveScripture = (id: string) => {
+    removeSavedScripture(id);
+    onScripturesChange();
+  };
 
   if (!user) return (
     <div className="max-w-md mx-auto text-center py-20">
@@ -159,9 +169,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({
            </motion.div>
         </div>
 
-        {/* ── Right Column: Stats & Insight ── */}
+        {/* ── Right Column: Stats & Saved Scriptures ── */}
         <div className="lg:col-span-8 space-y-8 md:space-y-12">
-           {/* Big Stats Grid */}
+           {/* Stats Grid */}
            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 md:gap-8">
               <motion.div 
                 whileHover={{ y: -4 }}
@@ -177,17 +187,77 @@ export const UserProfile: React.FC<UserProfileProps> = ({
               </motion.div>
               <motion.div 
                 whileHover={{ y: -4 }}
-                className="bg-white rounded-[32px] md:rounded-[48px] p-8 md:p-12 border border-indigo-50 shadow-lg flex flex-col justify-between"
+                className="bg-white rounded-[32px] md:rounded-[48px] p-8 md:p-12 border border-amber-100 shadow-lg flex flex-col justify-between"
               >
-                 <div className="w-14 h-14 md:w-16 md:h-16 bg-rose-50 rounded-[20px] md:rounded-3xl flex items-center justify-center mb-8 md:mb-10">
-                    <Heart className="w-6 h-6 md:w-8 md:h-8 text-rose-500" />
+                 <div className="w-14 h-14 md:w-16 md:h-16 bg-amber-50 rounded-[20px] md:rounded-3xl flex items-center justify-center mb-8 md:mb-10">
+                    <Bookmark className="w-6 h-6 md:w-8 md:h-8 text-amber-500" />
                  </div>
                  <div>
-                    <h4 className="text-5xl md:text-6xl font-serif font-black text-indigo-950 mb-2">{stats.favorites}</h4>
-                    <p className="text-indigo-900/50 text-[10px] md:text-xs font-black uppercase tracking-[0.3em]">Favorite Sermons</p>
+                    <h4 className="text-5xl md:text-6xl font-serif font-black text-indigo-950 mb-2">{savedScriptures.length}</h4>
+                    <p className="text-indigo-900/50 text-[10px] md:text-xs font-black uppercase tracking-[0.3em]">Saved Scriptures</p>
                  </div>
               </motion.div>
            </div>
+
+           {/* Saved Scriptures List */}
+           <motion.div
+             initial={{ opacity: 0 }}
+             whileInView={{ opacity: 1 }}
+             viewport={{ once: true }}
+             className="bg-white rounded-[32px] md:rounded-[56px] p-8 md:p-12 border border-amber-100 shadow-xl"
+           >
+             <div className="flex items-center space-x-3 mb-8">
+               <BookMarked className="w-6 h-6 text-amber-500" />
+               <h3 className="text-xl md:text-2xl font-serif font-black text-indigo-950">Saved Scriptures</h3>
+             </div>
+
+             {savedScriptures.length === 0 ? (
+               <div className="text-center py-12">
+                 <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                   <Bookmark className="w-8 h-8 text-amber-300" />
+                 </div>
+                 <p className="font-serif italic text-indigo-900/40 text-lg">No scriptures saved yet.</p>
+                 <p className="text-xs text-indigo-900/30 mt-2 font-bold uppercase tracking-widest">
+                   Tap the bookmark icon on any scripture to save it here.
+                 </p>
+               </div>
+             ) : (
+               <div className="space-y-4">
+                 {savedScriptures.map(s => (
+                   <motion.div
+                     key={s.id}
+                     initial={{ opacity: 0, y: 8 }}
+                     animate={{ opacity: 1, y: 0 }}
+                     className="group flex items-start justify-between gap-4 p-6 bg-amber-50/40 hover:bg-amber-50 border border-amber-100 rounded-[24px] transition-all"
+                   >
+                     <div className="min-w-0">
+                       <div className="flex items-center gap-2 mb-2 flex-wrap">
+                         <span className="text-base font-serif font-black text-amber-700 italic">{s.reference}</span>
+                         <span className="text-[10px] font-black uppercase tracking-widest text-indigo-900/30 bg-indigo-50 px-2 py-0.5 rounded-full truncate max-w-[160px]">
+                           {s.sermonTitle}
+                         </span>
+                       </div>
+                       <p className="text-sm text-indigo-900/70 font-serif leading-relaxed">
+                         {s.plain_meaning}
+                       </p>
+                       {s.speaker_usage && (
+                         <p className="text-xs text-indigo-900/40 italic mt-1 leading-relaxed">
+                           {s.speaker_usage}
+                         </p>
+                       )}
+                     </div>
+                     <button
+                       onClick={() => handleRemoveScripture(s.id)}
+                       className="flex-shrink-0 p-2 text-indigo-200 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                       title="Remove from saved"
+                     >
+                       <Trash2 className="w-4 h-4" />
+                     </button>
+                   </motion.div>
+                 ))}
+               </div>
+             )}
+           </motion.div>
 
            {/* Personal Info & Security */}
            <motion.div 

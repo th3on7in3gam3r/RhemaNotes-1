@@ -1,5 +1,5 @@
 import localforage from 'localforage';
-import { SermonHistoryItem, SermonSummaryOutput, UserNote } from '../types';
+import { SermonHistoryItem, SermonSummaryOutput, UserNote, SavedScripture } from '../types';
 
 const STORAGE_KEY = 'spiritscribe_history';
 const PENDING_SYNC_KEY = 'spiritscribe_pending_sync';
@@ -62,32 +62,41 @@ const flushPendingSyncQueue = async (): Promise<void> => {
   }
 };
 
-// ── Liked state (localStorage) ───────────────────────────────────────────────
-// Stored separately from D1/IndexedDB so it survives hard refreshes and is
-// never affected by service worker caching or D1 PATCH failures.
+// ── Saved Scriptures (localStorage) ─────────────────────────────────────────
+// Stored in localStorage — synchronous, survives hard refreshes, never
+// touched by the service worker or D1.
 
-const LIKED_KEY = 'spiritscribe_liked';
+const SAVED_SCRIPTURES_KEY = 'spiritscribe_saved_scriptures';
 
-const getLikedMap = (): Record<string, boolean> => {
+export const getSavedScriptures = (): SavedScripture[] => {
   try {
-    return JSON.parse(localStorage.getItem(LIKED_KEY) || '{}');
+    return JSON.parse(localStorage.getItem(SAVED_SCRIPTURES_KEY) || '[]');
   } catch {
-    return {};
+    return [];
   }
 };
 
-export const setSermonLiked = (id: string, liked: boolean): void => {
-  const map = getLikedMap();
-  if (liked) {
-    map[id] = true;
-  } else {
-    delete map[id];
-  }
-  localStorage.setItem(LIKED_KEY, JSON.stringify(map));
+export const saveScripture = (scripture: Omit<SavedScripture, 'id' | 'savedAt'>): SavedScripture => {
+  const saved = getSavedScriptures();
+  // Prevent duplicates — same reference + sermonId
+  const exists = saved.find(s => s.reference === scripture.reference && s.sermonId === scripture.sermonId);
+  if (exists) return exists;
+  const newEntry: SavedScripture = {
+    ...scripture,
+    id: crypto.randomUUID(),
+    savedAt: Date.now(),
+  };
+  localStorage.setItem(SAVED_SCRIPTURES_KEY, JSON.stringify([newEntry, ...saved]));
+  return newEntry;
 };
 
-export const getSermonLiked = (id: string): boolean => {
-  return getLikedMap()[id] === true;
+export const removeSavedScripture = (id: string): void => {
+  const saved = getSavedScriptures();
+  localStorage.setItem(SAVED_SCRIPTURES_KEY, JSON.stringify(saved.filter(s => s.id !== id)));
+};
+
+export const isScriptureSaved = (reference: string, sermonId: string): boolean => {
+  return getSavedScriptures().some(s => s.reference === reference && s.sermonId === sermonId);
 };
 
 // ── Guest → User claim ───────────────────────────────────────────────────────
@@ -214,8 +223,6 @@ export const getSermonHistory = async (userId: string = 'guest'): Promise<Sermon
   // 1. Load current local cache first to prevent any data loss
   const localHistory = await localforage.getItem<SermonHistoryItem[]>(STORAGE_KEY) || [];
   const localMap = new Map(localHistory.map(item => [item.id, item]));
-  // Load the reliable localStorage liked map
-  const likedMap = getLikedMap();
 
   try {
     // 2. Fetch from cloud with userId parameter to enforce creator isolation and bust cache
@@ -259,9 +266,6 @@ export const getSermonHistory = async (userId: string = 'guest'): Promise<Sermon
               title: s.title || mergedSummary.title,
               main_topic: s.main_topic || mergedSummary.main_topic,
               clean_transcript: s.clean_transcript || mergedSummary.clean_transcript,
-              // localStorage is the source of truth for liked — it's synchronous,
-              // survives hard refreshes, and is never touched by the service worker.
-              liked: likedMap[s.id] ?? localItem.summary.liked ?? parsedCloudSummary?.liked ?? false,
             },
           };
         }
@@ -284,10 +288,7 @@ export const getSermonHistory = async (userId: string = 'guest'): Promise<Sermon
           id: s.id,
           timestamp: new Date(s.created_at).getTime(),
           user_id: s.user_id,
-          summary: {
-            ...parsedSummary,
-            liked: likedMap[s.id] ?? parsedSummary.liked ?? false,
-          },
+          summary: parsedSummary,
         };
       });
 

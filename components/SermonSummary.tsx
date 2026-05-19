@@ -9,9 +9,9 @@ import { StudySystem } from './StudySystem';
 import { BibleTab } from './BibleTab';
 import { processSermonTranscript, generateGuidedPrompts } from '../services/geminiService';
 import localforage from 'localforage';
-import { updateSermonInHistory, setSermonLiked } from '../services/storageService';
+import { updateSermonInHistory, saveScripture, removeSavedScripture, isScriptureSaved, getSavedScriptures } from '../services/storageService';
 import { setPageMeta, buildSermonMeta } from '../services/seoService';
-import { BookOpen, RefreshCw, CheckCircle2, Copy, Sparkles, MessageSquare, Book, ChevronRight, Waves, Heart, FileText } from 'lucide-react';
+import { BookOpen, RefreshCw, CheckCircle2, Copy, Sparkles, MessageSquare, Book, ChevronRight, Waves, Heart, FileText, Bookmark } from 'lucide-react';
 import { SermonChat } from './SermonChat';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSubscription } from '../hooks/useSubscription';
@@ -55,6 +55,36 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
   const [guidedPrompts, setGuidedPrompts] = useState<string[]>([]);
   const [isLoadingPrompts, setIsLoadingPrompts] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  // Track which scripture references have been saved this session
+  const [savedRefs, setSavedRefs] = useState<Set<string>>(() => {
+    const set = new Set<string>();
+    if (historyId) {
+      currentSummary.scriptures?.forEach(s => {
+        if (isScriptureSaved(s.reference, historyId)) set.add(s.reference);
+      });
+    }
+    return set;
+  });
+
+  const handleSaveScripture = (scripture: { reference: string; plain_meaning: string; speaker_usage: string }) => {
+    if (!historyId) return;
+    const alreadySaved = savedRefs.has(scripture.reference);
+    if (alreadySaved) {
+      const all = getSavedScriptures();
+      const match = all.find(s => s.reference === scripture.reference && s.sermonId === historyId);
+      if (match) removeSavedScripture(match.id);
+      setSavedRefs(prev => { const next = new Set(prev); next.delete(scripture.reference); return next; });
+    } else {
+      saveScripture({
+        reference: scripture.reference,
+        plain_meaning: scripture.plain_meaning,
+        speaker_usage: scripture.speaker_usage,
+        sermonId: historyId,
+        sermonTitle: currentSummary.title || 'Untitled Sermon',
+      });
+      setSavedRefs(prev => new Set(prev).add(scripture.reference));
+    }
+  };
 
   useEffect(() => { 
     setCurrentSummary(summary); 
@@ -104,38 +134,6 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
       onUpdateHistory?.(updated);
     }
   }, [historyId, onUpdateHistory, activeUserId]);
-
-  const handleToggleLike = useCallback(async () => {
-    if (!isCreator) {
-      alert("Only the creator of this sermon note is allowed to like/favorite it.");
-      return;
-    }
-    const newLiked = !currentSummary.liked;
-    const updated = { ...currentSummary, liked: newLiked };
-
-    // 1. Update local UI state immediately
-    setCurrentSummary(updated);
-
-    // 2. Write to localStorage — source of truth, survives everything
-    if (historyId) setSermonLiked(historyId, newLiked);
-
-    // 3. Write to localforage
-    if (historyId) {
-      const stored = await localforage.getItem<any[]>('spiritscribe_history') || [];
-      await localforage.setItem(
-        'spiritscribe_history',
-        stored.map((item: any) => item.id === historyId ? { ...item, summary: updated } : item)
-      );
-    }
-
-    // 4. Notify parent to sync React state
-    onUpdateHistory?.(updated);
-
-    // 5. Fire-and-forget D1 PATCH — best effort, not required for UI
-    if (historyId && activeUserId) {
-      updateSermonInHistory(historyId, updated, activeUserId).catch(() => {});
-    }
-  }, [currentSummary, isCreator, historyId, activeUserId, onUpdateHistory]);
 
   const openInBible = useCallback((reference: string) => {
     setBibleInitialRef(reference);
@@ -248,21 +246,6 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
           </div>
           
           <div className="absolute top-10 right-10 flex items-center space-x-3">
-            {/* Heart/Like Toggle */}
-            <button
-              onClick={handleToggleLike}
-              className={`
-                p-2.5 rounded-2xl border transition-all shadow-sm active:scale-95 flex items-center justify-center
-                ${!isCreator ? 'opacity-60 cursor-not-allowed' : ''}
-                ${currentSummary.liked 
-                  ? 'bg-rose-50 border-rose-200 text-rose-500 hover:bg-rose-100 dark:bg-rose-950 dark:border-rose-900/50 dark:text-rose-400' 
-                  : 'bg-indigo-50/50 border-indigo-100/50 text-indigo-400 hover:bg-indigo-50 hover:text-indigo-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}
-              `}
-              title={!isCreator ? "Only the creator can favorite this sermon" : currentSummary.liked ? "Remove from Favorites" : "Save to Favorites"}
-            >
-              <Heart className={`w-5 h-5 ${currentSummary.liked ? 'fill-current' : ''}`} />
-            </button>
-
             {/* Copy Notes */}
             <button
               onClick={handleCopyText}
@@ -353,29 +336,50 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
           </div>
           
           <div className="flex flex-wrap gap-3">
-            {currentSummary.scriptures.map((scripture, i) => (
-              <div key={i} className="group relative">
-                <button
-                  onClick={() => openInBible(scripture.reference)}
-                  className="px-5 py-3 bg-white hover:bg-amber-100 text-indigo-950 border border-indigo-100 hover:border-amber-300 rounded-2xl text-sm font-serif font-bold italic transition-all hover:-translate-y-1 shadow-sm"
-                >
-                  {scripture.reference}
-                </button>
-                
-                {/* Divine Tooltip */}
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 w-64 p-4 bg-indigo-950 text-white rounded-2xl shadow-2xl opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 transition-all z-[70] text-left">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-400 mb-2">Divine Meaning</p>
-                  <p className="text-xs font-serif italic leading-relaxed text-amber-50">
-                    "{scripture.plain_meaning}"
-                  </p>
-                  <div className="absolute top-full left-1/2 -translate-x-1/2 w-3 h-3 bg-indigo-950 rotate-45 -mt-1.5" />
+            {currentSummary.scriptures.map((scripture, i) => {
+              const saved = savedRefs.has(scripture.reference);
+              return (
+                <div key={i} className="group relative">
+                  <div className="flex items-center gap-1 bg-white border border-indigo-100 hover:border-amber-300 rounded-2xl shadow-sm transition-all hover:-translate-y-0.5 overflow-hidden">
+                    <button
+                      onClick={() => openInBible(scripture.reference)}
+                      className="px-4 py-3 text-sm font-serif font-bold italic text-indigo-950 hover:bg-amber-50 transition-colors"
+                    >
+                      {scripture.reference}
+                    </button>
+                    <button
+                      onClick={() => handleSaveScripture(scripture)}
+                      title={saved ? 'Remove from saved scriptures' : 'Save to your profile'}
+                      className={`px-3 py-3 border-l transition-colors ${
+                        saved
+                          ? 'text-amber-600 bg-amber-50 border-amber-200 hover:bg-amber-100'
+                          : 'text-indigo-300 border-indigo-100 hover:text-amber-500 hover:bg-amber-50'
+                      }`}
+                    >
+                      <Bookmark className={`w-3.5 h-3.5 ${saved ? 'fill-current' : ''}`} />
+                    </button>
+                  </div>
+
+                  {/* Tooltip */}
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 w-64 p-4 bg-indigo-950 text-white rounded-2xl shadow-2xl opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 transition-all z-[70] text-left">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-amber-400 mb-2">Divine Meaning</p>
+                    <p className="text-xs font-serif italic leading-relaxed text-amber-50">
+                      "{scripture.plain_meaning}"
+                    </p>
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 w-3 h-3 bg-indigo-950 rotate-45 -mt-1.5" />
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             {currentSummary.scriptures.length === 0 && (
               <p className="text-lg text-indigo-900/30 font-serif italic">No scriptures detected in this journey.</p>
             )}
           </div>
+          {savedRefs.size > 0 && (
+            <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-amber-600">
+              {savedRefs.size} scripture{savedRefs.size !== 1 ? 's' : ''} saved to your profile
+            </p>
+          )}
         </div>
 
         {/* Reflection Journal Section */}
