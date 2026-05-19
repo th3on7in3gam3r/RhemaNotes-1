@@ -578,7 +578,7 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
       </div>
 
       {/* ── Sidebar (Chat & Bible) ── */}
-      <div className="w-full lg:w-[460px] flex-shrink-0 flex flex-col gap-6 lg:self-start lg:sticky lg:top-8 z-40">
+      <div className="w-full lg:w-[460px] flex-shrink-0 flex flex-col gap-6 lg:self-start lg:sticky lg:top-32 z-30">
         
         {/* Divine Sidebar Toggle */}
         <div className="flex bg-indigo-50/50 dark:bg-slate-800 p-2 rounded-3xl border border-indigo-100 dark:border-slate-800 shadow-inner">

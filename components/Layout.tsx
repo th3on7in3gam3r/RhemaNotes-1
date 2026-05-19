@@ -89,7 +89,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
       {/* ── Sacred Header ── */}
       <header
         className={`
-          fixed top-0 left-0 right-0 z-40
+          fixed top-0 left-0 right-0 z-50
           transition-all duration-500 ease-in-out
           ${scrolled 
             ? 'py-2 bg-white/80 backdrop-blur-xl shadow-lg border-b border-indigo-100' 
