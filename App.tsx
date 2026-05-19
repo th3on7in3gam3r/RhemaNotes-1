@@ -229,7 +229,7 @@ function App() {
     try {
       let result;
       if (file) {
-        result = await processSermonFile(file, includeReflection);
+        result = await processSermonFile(file, includeReflection, (status) => setYoutubeStep(status));
         result.audio_blob = file;
       } else {
         result = await processSermonTranscript(transcript, includeReflection);
@@ -244,6 +244,7 @@ function App() {
       setError(err.message || 'Failed to process sermon. Please try again.');
     } finally {
       setIsLoading(false);
+      setYoutubeStep(undefined);
     }
   }, [includeReflection, user]);
 
@@ -251,7 +252,7 @@ function App() {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await processSermonFile(file, includeReflection);
+      const result = await processSermonFile(file, includeReflection, (status) => setYoutubeStep(status));
       result.audio_blob = file;
       const savedItem = await saveSermonToHistory(result, user?.id || 'guest');
       setHistory(prev => [savedItem, ...prev]);
@@ -262,6 +263,7 @@ function App() {
       setError(err.message || 'Failed to process file. Please try again.');
     } finally {
       setIsLoading(false);
+      setYoutubeStep(undefined);
     }
   }, [includeReflection, user]);
 
