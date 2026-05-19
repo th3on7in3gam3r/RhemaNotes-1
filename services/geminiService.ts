@@ -368,7 +368,7 @@ export async function* streamSermonChat(
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function fileToBase64(file: File): Promise<string> {
+function fileToBase64(file: File | Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
