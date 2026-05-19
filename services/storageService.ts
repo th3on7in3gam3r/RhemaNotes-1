@@ -64,6 +64,17 @@ const flushPendingSyncQueue = async (): Promise<void> => {
 
 // ── Save ──────────────────────────────────────────────────────────────────────
 
+/**
+ * Strip fields that must not be serialized to D1:
+ *   - audio_blob: a Blob — JSON.stringify produces "{}", losing all data
+ *   - chat_history: can be very large, not needed for restore
+ * Both are session-only and cannot survive a page reload anyway.
+ */
+const stripNonSerializable = (summary: SermonSummaryOutput): SermonSummaryOutput => {
+  const { audio_blob, chat_history, ...rest } = summary as any;
+  return rest as SermonSummaryOutput;
+};
+
 export const saveSermonToHistory = async (
   summary: SermonSummaryOutput,
   userId: string = 'guest'
@@ -80,14 +91,15 @@ export const saveSermonToHistory = async (
   await localforage.setItem(STORAGE_KEY, [newItem, ...history]);
 
   // 2. Attempt to sync to Cloudflare D1
+  const serializable = stripNonSerializable(summary);
   const d1Payload = {
     id: newItem.id,
     user_id: userId,
-    title: summary.title,
-    main_topic: summary.main_topic,
-    clean_transcript: summary.clean_transcript,
+    title: serializable.title,
+    main_topic: serializable.main_topic,
+    clean_transcript: serializable.clean_transcript,
     source_type: 'text',
-    summary_json: JSON.stringify(summary),
+    summary_json: JSON.stringify(serializable),
   };
 
   try {
@@ -252,6 +264,7 @@ export const updateSermonInHistory = async (
   await localforage.setItem(STORAGE_KEY, updatedHistory);
 
   // 2. Update in cloud
+  const serializable = stripNonSerializable(summary);
   try {
     const res = await fetch(`${API_BASE}/${id}?userId=${userId}`, {
       method: 'PATCH',
@@ -260,10 +273,10 @@ export const updateSermonInHistory = async (
         'X-User-Id': userId,
       },
       body: JSON.stringify({
-        title: summary.title,
-        main_topic: summary.main_topic,
-        clean_transcript: summary.clean_transcript,
-        summary_json: JSON.stringify(summary),
+        title: serializable.title,
+        main_topic: serializable.main_topic,
+        clean_transcript: serializable.clean_transcript,
+        summary_json: JSON.stringify(serializable),
       }),
     });
 

@@ -262,39 +262,17 @@ function App() {
 
   /**
    * Called by SermonSummary after any in-place update (likes, journal, notes, etc.).
-   *
-   * We receive the already-updated summary directly so we can apply it to both
-   * `sermonOutput` and `history` immediately — no round-trip to D1 required.
-   * This prevents a failed PATCH from overwriting the optimistic UI state.
-   *
-   * A background re-fetch still runs to pick up any other changes, but it will
-   * NOT overwrite the summary we just received.
+   * Applies the update optimistically to both sermonOutput and history state.
+   * No D1 re-fetch — localforage is already updated by updateSermonInHistory,
+   * and a background sync would risk overwriting the optimistic state.
    */
-  const handleUpdateHistory = useCallback(async (updatedSummary?: SermonSummaryOutput) => {
-    // 1. Apply the optimistic update instantly if we have the new summary
-    if (updatedSummary && selectedHistoryId) {
-      setSermonOutput(updatedSummary);
-      setHistory(prev =>
-        prev.map(h => h.id === selectedHistoryId ? { ...h, summary: updatedSummary } : h)
-      );
-    }
-
-    // 2. Background sync from D1 to pick up any other changes.
-    //    We intentionally do NOT overwrite sermonOutput here — the optimistic
-    //    state above is the source of truth until the next full navigation.
-    getSermonHistory(user?.id || 'guest').then(newHistory => {
-      setHistory(prev => {
-        // Merge: keep the optimistic summary for the currently-open sermon,
-        // update everything else from the fresh cloud data.
-        return newHistory.map(h => {
-          if (h.id === selectedHistoryId && updatedSummary) {
-            return { ...h, summary: updatedSummary };
-          }
-          return h;
-        });
-      });
-    });
-  }, [user, selectedHistoryId]);
+  const handleUpdateHistory = useCallback((updatedSummary?: SermonSummaryOutput) => {
+    if (!updatedSummary || !selectedHistoryId) return;
+    setSermonOutput(updatedSummary);
+    setHistory(prev =>
+      prev.map(h => h.id === selectedHistoryId ? { ...h, summary: updatedSummary } : h)
+    );
+  }, [selectedHistoryId]);
 
   const handleDeleteItem = async (id: string) => {
     // ── Creator-only guard ────────────────────────────────────────────────────

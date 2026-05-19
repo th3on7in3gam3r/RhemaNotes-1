@@ -32,6 +32,20 @@ export default defineConfig(({ mode }) => {
         VitePWA({
           registerType: 'autoUpdate',
           includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+          workbox: {
+            // Never let the service worker intercept API calls or cache their responses.
+            // Without this, Workbox's default fetch handler can swallow POST/PATCH
+            // requests to /api/* and return stale cached responses.
+            navigateFallbackDenylist: [/^\/api\//],
+            runtimeCaching: [
+              {
+                // Cache static assets (JS, CSS, images) with StaleWhileRevalidate
+                urlPattern: /\.(?:js|css|png|jpg|jpeg|svg|ico|woff2?)$/,
+                handler: 'StaleWhileRevalidate',
+                options: { cacheName: 'static-assets' },
+              },
+            ],
+          },
           manifest: {
             name: 'RhemaNotes',
             short_name: 'RhemaNotes',
