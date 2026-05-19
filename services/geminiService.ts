@@ -176,8 +176,8 @@ async function extractAudioToWav(file: File): Promise<Blob> {
   // Decode audio data
   const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
   
-  // Downsample to 12000Hz mono
-  const targetSampleRate = 12000;
+  // Downsample to 8000Hz mono
+  const targetSampleRate = 8000;
   const numberOfChannels = 1;
   const duration = audioBuffer.duration;
   
@@ -211,7 +211,7 @@ function audioBufferToWav(buffer: AudioBuffer): Blob {
   const numOfChan = buffer.numberOfChannels;
   const sampleRate = buffer.sampleRate;
   const format = 1; // raw PCM
-  const bitDepth = 16;
+  const bitDepth = 8; // 8-bit resolution to keep the file size extremely small
   
   let result;
   if (numOfChan === 2) {
@@ -220,7 +220,7 @@ function audioBufferToWav(buffer: AudioBuffer): Blob {
     result = buffer.getChannelData(0);
   }
   
-  const bufferLength = result.length * 2;
+  const bufferLength = result.length * 1;
   const bufferArray = new ArrayBuffer(44 + bufferLength);
   const view = new DataView(bufferArray);
   
@@ -251,8 +251,8 @@ function audioBufferToWav(buffer: AudioBuffer): Blob {
   /* data chunk length */
   view.setUint32(40, bufferLength, true);
   
-  // Write PCM audio samples
-  floatTo16BitPCM(view, 44, result);
+  // Write 8-bit PCM audio samples (unsigned 0 to 255)
+  floatTo8BitPCM(view, 44, result);
   
   return new Blob([view], { type: 'audio/wav' });
 }
@@ -271,10 +271,11 @@ function interleave(inputL: Float32Array, inputR: Float32Array): Float32Array {
   return result;
 }
 
-function floatTo16BitPCM(output: DataView, offset: number, input: Float32Array) {
-  for (let i = 0; i < input.length; i++, offset += 2) {
+function floatTo8BitPCM(output: DataView, offset: number, input: Float32Array) {
+  for (let i = 0; i < input.length; i++, offset++) {
     let s = Math.max(-1, Math.min(1, input[i]));
-    output.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    let val = Math.floor((s + 1) * 127.5);
+    output.setUint8(offset, Math.max(0, Math.min(255, val)));
   }
 }
 
