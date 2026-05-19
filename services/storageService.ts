@@ -62,6 +62,34 @@ const flushPendingSyncQueue = async (): Promise<void> => {
   }
 };
 
+// ── Liked state (localStorage) ───────────────────────────────────────────────
+// Stored separately from D1/IndexedDB so it survives hard refreshes and is
+// never affected by service worker caching or D1 PATCH failures.
+
+const LIKED_KEY = 'spiritscribe_liked';
+
+const getLikedMap = (): Record<string, boolean> => {
+  try {
+    return JSON.parse(localStorage.getItem(LIKED_KEY) || '{}');
+  } catch {
+    return {};
+  }
+};
+
+export const setSermonLiked = (id: string, liked: boolean): void => {
+  const map = getLikedMap();
+  if (liked) {
+    map[id] = true;
+  } else {
+    delete map[id];
+  }
+  localStorage.setItem(LIKED_KEY, JSON.stringify(map));
+};
+
+export const getSermonLiked = (id: string): boolean => {
+  return getLikedMap()[id] === true;
+};
+
 // ── Guest → User claim ───────────────────────────────────────────────────────
 
 /**
@@ -186,6 +214,8 @@ export const getSermonHistory = async (userId: string = 'guest'): Promise<Sermon
   // 1. Load current local cache first to prevent any data loss
   const localHistory = await localforage.getItem<SermonHistoryItem[]>(STORAGE_KEY) || [];
   const localMap = new Map(localHistory.map(item => [item.id, item]));
+  // Load the reliable localStorage liked map
+  const likedMap = getLikedMap();
 
   try {
     // 2. Fetch from cloud with userId parameter to enforce creator isolation and bust cache
@@ -229,10 +259,9 @@ export const getSermonHistory = async (userId: string = 'guest'): Promise<Sermon
               title: s.title || mergedSummary.title,
               main_topic: s.main_topic || mergedSummary.main_topic,
               clean_transcript: s.clean_transcript || mergedSummary.clean_transcript,
-              // Always preserve the local liked state — it's the most up-to-date
-              // source since a PATCH may still be in-flight or have failed.
-              // If local has never set liked, fall back to whatever cloud has.
-              liked: localItem.summary.liked ?? parsedCloudSummary?.liked ?? false,
+              // localStorage is the source of truth for liked — it's synchronous,
+              // survives hard refreshes, and is never touched by the service worker.
+              liked: likedMap[s.id] ?? localItem.summary.liked ?? parsedCloudSummary?.liked ?? false,
             },
           };
         }
@@ -255,7 +284,10 @@ export const getSermonHistory = async (userId: string = 'guest'): Promise<Sermon
           id: s.id,
           timestamp: new Date(s.created_at).getTime(),
           user_id: s.user_id,
-          summary: parsedSummary,
+          summary: {
+            ...parsedSummary,
+            liked: likedMap[s.id] ?? parsedSummary.liked ?? false,
+          },
         };
       });
 

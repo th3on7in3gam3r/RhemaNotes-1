@@ -8,7 +8,7 @@ import { NotesTab } from './NotesTab';
 import { StudySystem } from './StudySystem';
 import { BibleTab } from './BibleTab';
 import { processSermonTranscript, generateGuidedPrompts } from '../services/geminiService';
-import { updateSermonInHistory } from '../services/storageService';
+import { updateSermonInHistory, setSermonLiked } from '../services/storageService';
 import { setPageMeta, buildSermonMeta } from '../services/seoService';
 import { BookOpen, RefreshCw, CheckCircle2, Copy, Sparkles, MessageSquare, Book, ChevronRight, Waves, Heart, FileText } from 'lucide-react';
 import { SermonChat } from './SermonChat';
@@ -109,12 +109,15 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
       alert("Only the creator of this sermon note is allowed to like/favorite it.");
       return;
     }
-    const updated = {
-      ...currentSummary,
-      liked: !currentSummary.liked
-    };
+    const newLiked = !currentSummary.liked;
+    const updated = { ...currentSummary, liked: newLiked };
+
+    // Write to localStorage immediately — this is the source of truth.
+    // It survives hard refreshes and is never touched by the service worker.
+    if (historyId) setSermonLiked(historyId, newLiked);
+
     await handleUpdateSummarization(updated);
-  }, [currentSummary, handleUpdateSummarization, isCreator]);
+  }, [currentSummary, handleUpdateSummarization, isCreator, historyId]);
 
   const openInBible = useCallback((reference: string) => {
     setBibleInitialRef(reference);

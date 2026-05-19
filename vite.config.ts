@@ -37,6 +37,10 @@ export default defineConfig(({ mode }) => {
             // Without this, Workbox's default fetch handler can swallow POST/PATCH
             // requests to /api/* and return stale cached responses.
             navigateFallbackDenylist: [/^\/api\//],
+            // Activate the new SW immediately without waiting for all tabs to close.
+            // This ensures API-exclusion rules take effect right away on deploy.
+            skipWaiting: true,
+            clientsClaim: true,
             runtimeCaching: [
               {
                 // Cache static assets (JS, CSS, images) with StaleWhileRevalidate
