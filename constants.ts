@@ -24,11 +24,11 @@ Return clean structured output in JSON format.
 
 LAYER 1 — TRANSCRIPT CLEANING & TRANSCRIPTION
 Create a highly readable, accurate transcript:
-- If audio/video, transcribe word-for-word first then clean.
-- remove filler words (um, uh, repetition)
-- keep original meaning
-- preserve speaker intent
-- paragraph format with logical breaks
+- If audio/video, transcribe the main message.
+- Remove filler words (um, uh, repetition).
+- Keep original meaning and preserve speaker intent.
+- Paragraph format with logical breaks.
+- CRITICAL: To prevent response truncation, if the sermon is long, summarize/condense the transcript so that the returned "clean_transcript" is strictly less than 1,000 words. Do not output a massive word-for-word text.
 
 LAYER 2 — THEMATIC ANALYSIS
 Identify the "Heart of the Message":

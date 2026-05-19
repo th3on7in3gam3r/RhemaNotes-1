@@ -294,6 +294,7 @@ async function callGemini(parts: any[], includeReflection: boolean): Promise<Ser
       config: {
         responseMimeType: "application/json",
         responseSchema: SERMON_SCHEMA,
+        maxOutputTokens: 8192,
       },
     });
 
