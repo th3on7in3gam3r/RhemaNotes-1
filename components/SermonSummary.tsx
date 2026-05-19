@@ -116,9 +116,48 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
       const points = (currentSummary.key_points || []).map((p, i) => `${i + 1}. ${p}`).join('\n');
       const apps = (currentSummary.applications || []).map((a, i) => `- ${a}`).join('\n');
       const text = `${currentSummary.title || ''}\n\nKey Points:\n${points}\n\nApplication:\n${apps}`;
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+
+      let copySuccess = false;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+          await navigator.clipboard.writeText(text);
+          copySuccess = true;
+        } catch (e) {
+          console.warn('navigator.clipboard failed, trying fallback:', e);
+        }
+      }
+
+      if (!copySuccess) {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.top = '0';
+        textArea.style.left = '0';
+        textArea.style.width = '2em';
+        textArea.style.height = '2em';
+        textArea.style.padding = '0';
+        textArea.style.border = 'none';
+        textArea.style.outline = 'none';
+        textArea.style.boxShadow = 'none';
+        textArea.style.background = 'transparent';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+          const successful = document.execCommand('copy');
+          if (successful) copySuccess = true;
+        } catch (err) {
+          console.error('Fallback copy failed:', err);
+        }
+        document.body.removeChild(textArea);
+      }
+
+      if (copySuccess) {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } else {
+        alert('Could not copy automatically. Please select and copy manually.');
+      }
     } catch (err) {
       console.error('Failed to copy', err);
     }
