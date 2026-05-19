@@ -11,7 +11,7 @@ import { UserProfile } from './components/UserProfile';
 import { useSubscription } from './hooks/useSubscription';
 import { Onboarding } from './components/Onboarding';
 import { processSermonTranscript, processSermonFile, processSermonYoutubeUrl } from './services/geminiService';
-import { getSermonHistory, saveSermonToHistory, deleteSermonFromHistory } from './services/storageService';
+import { getSermonHistory, saveSermonToHistory, deleteSermonFromHistory, claimGuestSermons } from './services/storageService';
 import { setPageMeta, HOME_META, HISTORY_META } from './services/seoService';
 import { SermonSummaryOutput, SermonHistoryItem, UserNote } from './types';
 import { DEMO_SERMON } from './demoSermon';
@@ -187,7 +187,18 @@ function App() {
     // Wait for Clerk to finish loading so we never fetch history as 'guest'
     // when the real signed-in user is about to be resolved.
     if (!clerkLoaded) return;
-    getSermonHistory(user?.id || 'guest').then(setHistory);
+
+    const userId = user?.id || 'guest';
+
+    // When a real user signs in, claim any sermons they created as a guest
+    // in this browser so they don't disappear from their library.
+    if (user?.id) {
+      claimGuestSermons(user.id).then(() =>
+        getSermonHistory(userId).then(setHistory)
+      );
+    } else {
+      getSermonHistory(userId).then(setHistory);
+    }
   }, [user, clerkLoaded]);
 
   useEffect(() => { 
@@ -275,15 +286,21 @@ function App() {
   }, [selectedHistoryId]);
 
   const handleDeleteItem = async (id: string) => {
-    // ── Creator-only guard ────────────────────────────────────────────────────
     const activeUserId = user?.id || 'guest';
+
+    // Require a real signed-in user to delete — guests cannot delete anything.
+    if (activeUserId === 'guest') {
+      alert('Please sign in to delete sermon records.');
+      return;
+    }
+
     const target = history.find(i => i.id === id);
-    // Block deletion if the item exists and its owner doesn't match the active user
-    if (target?.user_id && target.user_id !== activeUserId) {
+    // Block if the item belongs to a different real user
+    if (target?.user_id && target.user_id !== 'guest' && target.user_id !== activeUserId) {
       alert('Only the creator of this sermon record is allowed to delete it.');
       return;
     }
-    // ─────────────────────────────────────────────────────────────────────────
+
     await deleteSermonFromHistory(id, activeUserId);
     setHistory(prev => prev.filter(i => i.id !== id));
     if (selectedHistoryId === id) {

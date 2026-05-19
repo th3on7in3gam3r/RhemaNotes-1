@@ -174,12 +174,19 @@ async function handleSermonsAPI(request: Request, env: Env): Promise<Response> {
     // DELETE /api/sermons/:id
     if (request.method === 'DELETE' && sermonId) {
       const requestingUserId = request.headers.get('X-User-Id') || url.searchParams.get('userId') || 'guest';
+
+      // Require a real user ID — never allow 'guest' to delete from D1
+      if (requestingUserId === 'guest') {
+        return new Response(JSON.stringify({ error: 'Sign in required to delete sermons' }), { status: 401, headers: cors });
+      }
+
       const sermon = await env.DB.prepare('SELECT user_id FROM sermons WHERE id = ?').bind(sermonId).first() as any;
       
       if (!sermon) {
         return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: cors });
       }
-      if (sermon.user_id !== requestingUserId) {
+      // Allow delete if: owner matches, OR the sermon was a guest sermon being claimed
+      if (sermon.user_id !== requestingUserId && sermon.user_id !== 'guest') {
         return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: cors });
       }
 

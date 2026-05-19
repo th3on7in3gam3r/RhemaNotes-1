@@ -62,6 +62,60 @@ const flushPendingSyncQueue = async (): Promise<void> => {
   }
 };
 
+// ── Guest → User claim ───────────────────────────────────────────────────────
+
+/**
+ * When a user signs in, any sermons that were created as 'guest' in this
+ * browser session should be claimed under their real user ID.
+ *
+ * Steps:
+ *   1. Find all local items with user_id === 'guest'
+ *   2. Re-POST them to D1 with the real user_id (worker allows this)
+ *   3. Update localforage so they carry the real user_id going forward
+ *
+ * Called from App.tsx whenever the Clerk user transitions from null → real user.
+ */
+export const claimGuestSermons = async (realUserId: string): Promise<void> => {
+  if (!realUserId || realUserId === 'guest') return;
+
+  const history = await localforage.getItem<SermonHistoryItem[]>(STORAGE_KEY) || [];
+  const guestItems = history.filter(item => !item.user_id || item.user_id === 'guest');
+  if (guestItems.length === 0) return;
+
+  // Re-POST each guest sermon under the real user_id.
+  // The worker's INSERT will fail with a duplicate-key error if the row already
+  // exists — that's fine, we just ignore it and still update localforage.
+  for (const item of guestItems) {
+    const serializable = stripNonSerializable(item.summary);
+    try {
+      await fetch(API_BASE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: item.id,
+          user_id: realUserId,
+          title: serializable.title,
+          main_topic: serializable.main_topic,
+          clean_transcript: serializable.clean_transcript,
+          source_type: 'text',
+          summary_json: JSON.stringify(serializable),
+        }),
+      });
+    } catch {
+      // Network error — the PATCH guest-claim in the worker will handle it
+      // next time the user loads their history
+    }
+  }
+
+  // Update localforage: stamp all guest items with the real user_id
+  const updated = history.map(item =>
+    (!item.user_id || item.user_id === 'guest')
+      ? { ...item, user_id: realUserId }
+      : item
+  );
+  await localforage.setItem(STORAGE_KEY, updated);
+};
+
 // ── Save ──────────────────────────────────────────────────────────────────────
 
 /**
@@ -205,11 +259,17 @@ export const getSermonHistory = async (userId: string = 'guest'): Promise<Sermon
         };
       });
 
-      // 3. Preserve local-only items (offline creations / delayed syncs)
+      // 3. Preserve local-only items (offline creations / delayed syncs).
+      // Also include any items still tagged as 'guest' in localforage — these
+      // are sermons created before sign-in that haven't been claimed yet.
+      // They stay visible until claimGuestSermons() re-tags them.
       const cloudIds = new Set(cloudSermons.map(s => s.id));
-      const localOnly = localHistory.filter(
-        item => !cloudIds.has(item.id) && (!item.user_id || item.user_id === userId)
-      );
+      const localOnly = localHistory.filter(item => {
+        if (cloudIds.has(item.id)) return false; // already in cloud result
+        const isOwned = !item.user_id || item.user_id === userId;
+        const isUnclaimed = item.user_id === 'guest';
+        return isOwned || isUnclaimed;
+      });
 
       const merged = [...formatted, ...localOnly].sort((a, b) => b.timestamp - a.timestamp);
 
@@ -222,8 +282,10 @@ export const getSermonHistory = async (userId: string = 'guest'): Promise<Sermon
     console.warn('D1 fetch failed, falling back to local storage.', e);
   }
 
-  // 4. Fallback to local storage
-  return localHistory.filter(item => !item.user_id || item.user_id === userId);
+  // 4. Fallback to local storage — include guest items so they're never lost
+  return localHistory.filter(
+    item => !item.user_id || item.user_id === userId || item.user_id === 'guest'
+  );
 };
 
 // ── Delete ────────────────────────────────────────────────────────────────────
