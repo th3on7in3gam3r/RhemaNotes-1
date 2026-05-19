@@ -278,10 +278,15 @@ function App() {
    * and a background sync would risk overwriting the optimistic state.
    */
   const handleUpdateHistory = useCallback((updatedSummary?: SermonSummaryOutput) => {
-    if (!updatedSummary || !selectedHistoryId) return;
+    if (!updatedSummary) return;
+    // Update sermonOutput regardless — the summary is the source of truth
     setSermonOutput(updatedSummary);
+    // Update the matching history entry if we can find it
     setHistory(prev =>
-      prev.map(h => h.id === selectedHistoryId ? { ...h, summary: updatedSummary } : h)
+      prev.map(h => h.summary.title === updatedSummary.title && selectedHistoryId
+        ? h.id === selectedHistoryId ? { ...h, summary: updatedSummary } : h
+        : h
+      )
     );
   }, [selectedHistoryId]);
 

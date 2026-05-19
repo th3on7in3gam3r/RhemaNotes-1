@@ -8,6 +8,7 @@ import { NotesTab } from './NotesTab';
 import { StudySystem } from './StudySystem';
 import { BibleTab } from './BibleTab';
 import { processSermonTranscript, generateGuidedPrompts } from '../services/geminiService';
+import localforage from 'localforage';
 import { updateSermonInHistory, setSermonLiked } from '../services/storageService';
 import { setPageMeta, buildSermonMeta } from '../services/seoService';
 import { BookOpen, RefreshCw, CheckCircle2, Copy, Sparkles, MessageSquare, Book, ChevronRight, Waves, Heart, FileText } from 'lucide-react';
@@ -112,12 +113,29 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
     const newLiked = !currentSummary.liked;
     const updated = { ...currentSummary, liked: newLiked };
 
-    // Write to localStorage immediately — this is the source of truth.
-    // It survives hard refreshes and is never touched by the service worker.
+    // 1. Update local UI state immediately
+    setCurrentSummary(updated);
+
+    // 2. Write to localStorage — source of truth, survives everything
     if (historyId) setSermonLiked(historyId, newLiked);
 
-    await handleUpdateSummarization(updated);
-  }, [currentSummary, handleUpdateSummarization, isCreator, historyId]);
+    // 3. Write to localforage
+    if (historyId) {
+      const stored = await localforage.getItem<any[]>('spiritscribe_history') || [];
+      await localforage.setItem(
+        'spiritscribe_history',
+        stored.map((item: any) => item.id === historyId ? { ...item, summary: updated } : item)
+      );
+    }
+
+    // 4. Notify parent to sync React state
+    onUpdateHistory?.(updated);
+
+    // 5. Fire-and-forget D1 PATCH — best effort, not required for UI
+    if (historyId && activeUserId) {
+      updateSermonInHistory(historyId, updated, activeUserId).catch(() => {});
+    }
+  }, [currentSummary, isCreator, historyId, activeUserId, onUpdateHistory]);
 
   const openInBible = useCallback((reference: string) => {
     setBibleInitialRef(reference);
