@@ -176,8 +176,8 @@ async function extractAudioToWav(file: File): Promise<Blob> {
   // Decode audio data
   const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
   
-  // Downsample to 16000Hz mono
-  const targetSampleRate = 16000;
+  // Downsample to 12000Hz mono
+  const targetSampleRate = 12000;
   const numberOfChannels = 1;
   const duration = audioBuffer.duration;
   

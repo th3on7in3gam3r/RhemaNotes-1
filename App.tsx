@@ -241,7 +241,10 @@ function App() {
       setSelectedHistoryId(savedItem.id);
       setCurrentScreen('summary');
     } catch (err: any) {
-      setError(err.message || 'Failed to process sermon. Please try again.');
+      const isOffline = !navigator.onLine || err.message?.includes('Failed to fetch') || err.message?.includes('network') || err.message?.includes('disconnected');
+      setError(isOffline 
+        ? 'Your internet connection was disconnected or timed out during the upload. Please verify your connection and try again.' 
+        : (err.message || 'Failed to process sermon. Please try again.'));
     } finally {
       setIsLoading(false);
       setYoutubeStep(undefined);
@@ -260,7 +263,10 @@ function App() {
       setSelectedHistoryId(savedItem.id);
       setCurrentScreen('summary');
     } catch (err: any) {
-      setError(err.message || 'Failed to process file. Please try again.');
+      const isOffline = !navigator.onLine || err.message?.includes('Failed to fetch') || err.message?.includes('network') || err.message?.includes('disconnected');
+      setError(isOffline 
+        ? 'Your internet connection was disconnected or timed out during the upload. Please verify your connection and try again.' 
+        : (err.message || 'Failed to process file. Please try again.'));
     } finally {
       setIsLoading(false);
       setYoutubeStep(undefined);
