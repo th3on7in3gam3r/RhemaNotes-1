@@ -25,6 +25,7 @@
 
 import { buildMetaHTML, buildSermonMeta, HOME_META, HISTORY_META } from '../services/seoService';
 import Stripe from 'stripe';
+import { getYouTubeTranscript } from '../services/youtubeService';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -82,6 +83,10 @@ export default {
 
     if (path === '/api/user' && request.method === 'GET') {
       return handleUserAPI(request, env);
+    }
+
+    if (path === '/api/youtube-transcript' && request.method === 'GET') {
+      return handleYouTubeTranscriptAPI(request, env);
     }
 
     // 2. Handle robots.txt & sitemap
@@ -511,4 +516,26 @@ async function handleGeminiProxyAPI(request: Request, env: Env): Promise<Respons
   
   return response;
 }
+
+async function handleYouTubeTranscriptAPI(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const targetUrl = url.searchParams.get('url');
+
+  const cors = {
+    'Access-Control-Allow-Origin': '*',
+    'Content-Type': 'application/json',
+  };
+
+  if (!targetUrl) {
+    return new Response(JSON.stringify({ error: 'Missing url parameter' }), { status: 400, headers: cors });
+  }
+
+  try {
+    const result = await getYouTubeTranscript(targetUrl, false);
+    return new Response(JSON.stringify(result), { headers: cors });
+  } catch (err: any) {
+    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: cors });
+  }
+}
+
 

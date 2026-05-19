@@ -113,9 +113,9 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
 
   const handleCopyText = async () => {
     try {
-      const points = currentSummary.key_points.map((p, i) => `${i + 1}. ${p}`).join('\n');
-      const apps = currentSummary.applications.map((a, i) => `- ${a}`).join('\n');
-      const text = `${currentSummary.title}\n\nKey Points:\n${points}\n\nApplication:\n${apps}`;
+      const points = (currentSummary.key_points || []).map((p, i) => `${i + 1}. ${p}`).join('\n');
+      const apps = (currentSummary.applications || []).map((a, i) => `- ${a}`).join('\n');
+      const text = `${currentSummary.title || ''}\n\nKey Points:\n${points}\n\nApplication:\n${apps}`;
       await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
