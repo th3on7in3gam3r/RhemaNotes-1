@@ -1,16 +1,51 @@
 import localforage from 'localforage';
 import { SermonHistoryItem, SermonSummaryOutput, UserNote, SavedScripture } from '../types';
+import type { SermonSourceType } from '../types/source';
+import { authFetch } from './apiAuth';
 
-const STORAGE_KEY = 'spiritscribe_history';
-const PENDING_SYNC_KEY = 'spiritscribe_pending_sync';
+const STORAGE_KEY = 'rhemanotes_history';
+const PENDING_SYNC_KEY = 'rhemanotes_pending_sync';
+const LEGACY_STORAGE_KEY = 'spiritscribe_history';
+const LEGACY_PENDING_KEY = 'spiritscribe_pending_sync';
 const API_BASE = '/api/sermons';
+const SAVED_SCRIPTURES_KEY = 'rhemanotes_saved_scriptures';
 
-// Configure localforage to use IndexedDB primarily
 localforage.config({
-  name: 'SpiritScribe',
+  name: 'RhemaNotes',
   storeName: 'sermons',
-  description: 'Stores generated sermon histories and transcripts'
+  description: 'Stores generated sermon histories and transcripts',
 });
+
+/** One-time migration from SpiritScribe localforage keys */
+const migrateLegacyStorage = async (): Promise<void> => {
+  const flag = 'rhemanotes_storage_migrated_v1';
+  if (localStorage.getItem(flag)) return;
+
+  const legacyHistory = await localforage.getItem<SermonHistoryItem[]>(LEGACY_STORAGE_KEY);
+  if (legacyHistory?.length) {
+    const current = (await localforage.getItem<SermonHistoryItem[]>(STORAGE_KEY)) || [];
+    const ids = new Set(current.map((i) => i.id));
+    await localforage.setItem(STORAGE_KEY, [...current, ...legacyHistory.filter((i) => !ids.has(i.id))]);
+    await localforage.removeItem(LEGACY_STORAGE_KEY);
+  }
+
+  const legacyPending = await localforage.getItem<PendingSyncItem[]>(LEGACY_PENDING_KEY);
+  if (legacyPending?.length) {
+    const current = (await localforage.getItem<PendingSyncItem[]>(PENDING_SYNC_KEY)) || [];
+    await localforage.setItem(PENDING_SYNC_KEY, [...current, ...legacyPending]);
+    await localforage.removeItem(LEGACY_PENDING_KEY);
+  }
+
+  const legacyScriptures = localStorage.getItem('spiritscribe_saved_scriptures');
+  if (legacyScriptures && !localStorage.getItem(SAVED_SCRIPTURES_KEY)) {
+    localStorage.setItem(SAVED_SCRIPTURES_KEY, legacyScriptures);
+    localStorage.removeItem('spiritscribe_saved_scriptures');
+  }
+
+  localStorage.setItem(flag, '1');
+};
+
+void migrateLegacyStorage();
 
 // ── Pending sync queue ────────────────────────────────────────────────────────
 // Items that failed to POST to D1 are queued here and retried on next load.
@@ -37,6 +72,11 @@ const removeFromPendingSyncQueue = async (id: string): Promise<void> => {
   await localforage.setItem(PENDING_SYNC_KEY, queue.filter(q => q.id !== id));
 };
 
+export const getPendingSyncCount = async (): Promise<number> => {
+  const queue = await getPendingSyncQueue();
+  return queue.length;
+};
+
 /**
  * Retry any items that failed to POST to D1 on a previous session.
  * Called at the start of getSermonHistory so it runs automatically on every load.
@@ -47,9 +87,8 @@ const flushPendingSyncQueue = async (): Promise<void> => {
 
   for (const item of queue) {
     try {
-      const res = await fetch(API_BASE, {
+      const res = await authFetch(API_BASE, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(item.payload),
       });
       if (res.ok || res.status === 409) {
@@ -63,10 +102,6 @@ const flushPendingSyncQueue = async (): Promise<void> => {
 };
 
 // ── Saved Scriptures (localStorage) ─────────────────────────────────────────
-// Stored in localStorage — synchronous, survives hard refreshes, never
-// touched by the service worker or D1.
-
-const SAVED_SCRIPTURES_KEY = 'spiritscribe_saved_scriptures';
 
 export const getSavedScriptures = (): SavedScripture[] => {
   try {
@@ -125,9 +160,8 @@ export const claimGuestSermons = async (realUserId: string): Promise<void> => {
   for (const item of guestItems) {
     const serializable = stripNonSerializable(item.summary);
     try {
-      await fetch(API_BASE, {
+      await authFetch(API_BASE, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: item.id,
           user_id: realUserId,
@@ -168,7 +202,8 @@ const stripNonSerializable = (summary: SermonSummaryOutput): SermonSummaryOutput
 
 export const saveSermonToHistory = async (
   summary: SermonSummaryOutput,
-  userId: string = 'guest'
+  userId: string = 'guest',
+  sourceType: SermonSourceType = 'text',
 ): Promise<SermonHistoryItem> => {
   const newItem: SermonHistoryItem = {
     id: crypto.randomUUID(),
@@ -189,14 +224,13 @@ export const saveSermonToHistory = async (
     title: serializable.title,
     main_topic: serializable.main_topic,
     clean_transcript: serializable.clean_transcript,
-    source_type: 'text',
+    source_type: sourceType,
     summary_json: JSON.stringify(serializable),
   };
 
   try {
-    const res = await fetch(API_BASE, {
+    const res = await authFetch(API_BASE, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(d1Payload),
     });
 
@@ -226,7 +260,7 @@ export const getSermonHistory = async (userId: string = 'guest'): Promise<Sermon
 
   try {
     // 2. Fetch from cloud with userId parameter to enforce creator isolation and bust cache
-    const response = await fetch(`${API_BASE}?userId=${userId}&t=${Date.now()}`, {
+    const response = await authFetch(`${API_BASE}?userId=${userId}&t=${Date.now()}`, {
       headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
     });
 
@@ -330,7 +364,7 @@ export const deleteSermonFromHistory = async (id: string, userId: string = 'gues
 
   // 2. Remove from cloud
   try {
-    await fetch(`${API_BASE}/${id}?userId=${userId}`, {
+    await authFetch(`${API_BASE}/${id}?userId=${userId}`, {
       method: 'DELETE',
       headers: { 'X-User-Id': userId },
     });
@@ -361,12 +395,9 @@ export const updateSermonInHistory = async (
   // 2. Update in cloud
   const serializable = stripNonSerializable(summary);
   try {
-    const res = await fetch(`${API_BASE}/${id}?userId=${userId}`, {
+    const res = await authFetch(`${API_BASE}/${id}?userId=${userId}`, {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-User-Id': userId,
-      },
+      headers: { 'X-User-Id': userId },
       body: JSON.stringify({
         title: serializable.title,
         main_topic: serializable.main_topic,
@@ -389,12 +420,22 @@ export const updateSermonInHistory = async (
 
 // ── Live Drafts (Local Only) ──────────────────────────────────────────────────
 
-const DRAFT_KEY = 'spiritscribe_live_draft';
+const DRAFT_KEY = 'rhemanotes_live_draft';
+const LEGACY_DRAFT_KEY = 'spiritscribe_live_draft';
+
+const migrateLiveDraft = async (): Promise<void> => {
+  const legacy = await localforage.getItem<UserNote[]>(LEGACY_DRAFT_KEY);
+  if (legacy?.length && !(await localforage.getItem(DRAFT_KEY))) {
+    await localforage.setItem(DRAFT_KEY, legacy);
+    await localforage.removeItem(LEGACY_DRAFT_KEY);
+  }
+};
 
 export const saveLiveDraft = async (notes: UserNote[]): Promise<void> => {
   await localforage.setItem(DRAFT_KEY, notes);
 };
 export const getLiveDraft = async (): Promise<UserNote[]> => {
+  await migrateLiveDraft();
   const stored = await localforage.getItem<UserNote[]>(DRAFT_KEY);
   return stored || [];
 };

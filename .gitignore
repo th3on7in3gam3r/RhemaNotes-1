@@ -25,3 +25,10 @@ dist-ssr
 
 # Environment Variables
 .env*
+
+# Dev-only (not shipped)
+migrated_prompt_history/
+scripts/test-gemini-sermon.mjs
+scripts/test-gemini-yt.mjs
+scripts/test-yt.mjs
+scripts/test-youtube.js

@@ -1,6 +1,7 @@
 import React from 'react';
 import { SermonHistoryItem } from '../types';
 import { Button } from './Button';
+import { PendingSyncBanner } from './PendingSyncBanner';
 import { BookOpen, ChevronRight, Trash2, Clock, BookMarked, Sparkles, Waves } from 'lucide-react';
 
 interface SermonHistoryProps {
@@ -53,6 +54,8 @@ export const SermonHistory: React.FC<SermonHistoryProps> = ({
           </button>
         </div>
       </div>
+
+      <PendingSyncBanner />
 
       {history.length === 0 ? (
         <div className="sacred-card p-20 text-center flex flex-col items-center">

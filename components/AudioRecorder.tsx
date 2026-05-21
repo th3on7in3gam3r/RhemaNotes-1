@@ -3,6 +3,7 @@ import { UserNote } from '../types';
 import { Button } from './Button';
 import { Mic, StopCircle, X, Send, StickyNote, RotateCcw, Waves, Sparkles, Heart, Clock } from 'lucide-react';
 import { saveLiveDraft, getLiveDraft, clearLiveDraft } from '../services/storageService';
+import { LONG_RECORDING_WARN_SECONDS } from '../constants/ai';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface AudioRecorderProps {
@@ -132,10 +133,14 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({ onStopRecording, o
   const stopVisualizer = () => {
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
     }
-    if (audioCtxRef.current) {
-      audioCtxRef.current.close();
+    const ctx = audioCtxRef.current;
+    if (ctx && ctx.state !== 'closed') {
+      ctx.close().catch(() => {});
     }
+    audioCtxRef.current = null;
+    analyserRef.current = null;
     setAudioQuality('none');
   };
 
@@ -200,6 +205,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({ onStopRecording, o
         releaseWakeLock();
         if (intervalRef.current) {
           window.clearInterval(intervalRef.current);
+          intervalRef.current = null;
         }
 
         try {
@@ -222,10 +228,14 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({ onStopRecording, o
           
           await onStopRecording('', liveNotesRef.current, audioFile);
           await clearLiveDraft();
+        } catch (err) {
+          // onStopRecording sets UI error state; swallow here so onstop doesn't reject uncaught
+          console.error('Error finishing live recording:', err);
         } finally {
           // Guarantee microphone track release to avoid system locking issues
           if (streamRef.current) {
             streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
           }
         }
       };
@@ -320,6 +330,12 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({ onStopRecording, o
                 </button>
               </div>
 
+              {isRecording && recordingDuration >= LONG_RECORDING_WARN_SECONDS && (
+                <p className="mt-4 text-sm font-bold text-amber-700 bg-amber-50 px-4 py-2 rounded-xl border border-amber-200">
+                  Long recordings may take several minutes to transcribe. Consider shorter segments if possible.
+                </p>
+              )}
+
               {isRecording && (
                 <div className="w-full mt-12 flex flex-col items-center">
                   <canvas 
@@ -352,7 +368,9 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({ onStopRecording, o
                  </span>
               </div>
               <p className="text-sm font-serif italic text-indigo-900/40">
-                {isRecording ? 'Preserving the spoken word for reflection...' : 'Your recording will be kept private & sacred.'}
+                {isRecording
+                  ? 'Recording the sermon — we will transcribe it when you finish.'
+                  : 'Record the full sermon, then we transcribe it and build your study guide.'}
               </p>
             </div>
 
@@ -462,19 +480,6 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({ onStopRecording, o
           </div>
         </div>
       </div>
-
-      {isLoading && (
-        <div className="fixed inset-0 z-[100] bg-indigo-950/80 backdrop-blur-xl flex flex-col items-center justify-center text-center p-8">
-           <div className="relative w-32 h-32 mb-12">
-              <div className="absolute inset-0 bg-amber-400/20 rounded-full animate-ping" />
-              <div className="relative w-full h-full bg-indigo-900 rounded-[40px] flex items-center justify-center border-2 border-amber-200/50 shadow-2xl">
-                 <Sparkles className="w-12 h-12 text-amber-200 animate-pulse" />
-              </div>
-           </div>
-           <h2 className="text-4xl font-serif font-black text-amber-50 mb-4 tracking-tight">Illuminating the Word</h2>
-           <p className="text-amber-100/40 font-serif italic text-xl">"Speak, Lord, for your servant is listening." — 1 Samuel 3:9</p>
-        </div>
-      )}
 
       {error && (
         <motion.div 

@@ -26,6 +26,9 @@
 import { buildMetaHTML, buildSermonMeta, HOME_META, HISTORY_META } from '../services/seoService';
 import Stripe from 'stripe';
 import { getYouTubeTranscript } from '../services/youtubeService';
+import { GEMINI_PROXY_MAX_BODY_BYTES } from '../constants/ai';
+import { resolveAuth, enforceWriteUserId } from './auth';
+import { checkRateLimit, clientRateLimitKey } from './rateLimit';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -159,18 +162,23 @@ async function handleSermonsAPI(request: Request, env: Env): Promise<Response> {
 
     // POST /api/sermons — create a sermon
     if (request.method === 'POST') {
+      const auth = await resolveAuth(request, env);
       const data: any = await request.json();
       const id = data.id || crypto.randomUUID();
+      const userId = enforceWriteUserId(auth, data.user_id);
+      const allowedSources = ['youtube', 'upload', 'text', 'live'];
+      const sourceType = allowedSources.includes(data.source_type) ? data.source_type : 'text';
+
       await env.DB.prepare(
         `INSERT INTO sermons (id, user_id, title, main_topic, clean_transcript, source_type, summary_json, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
       ).bind(
         id,
-        data.user_id || 'guest',
+        userId,
         data.title || 'Untitled Sermon',
         data.main_topic || '',
         data.clean_transcript || '',
-        data.source_type || 'text',
+        sourceType,
         data.summary_json || null
       ).run();
       return new Response(JSON.stringify({ success: true, id }), { headers: cors });
@@ -178,7 +186,8 @@ async function handleSermonsAPI(request: Request, env: Env): Promise<Response> {
 
     // DELETE /api/sermons/:id
     if (request.method === 'DELETE' && sermonId) {
-      const requestingUserId = request.headers.get('X-User-Id') || url.searchParams.get('userId') || 'guest';
+      const auth = await resolveAuth(request, env);
+      const requestingUserId = auth.authenticated ? auth.userId : (request.headers.get('X-User-Id') || url.searchParams.get('userId') || 'guest');
 
       // Require a real user ID — never allow 'guest' to delete from D1
       if (requestingUserId === 'guest') {
@@ -201,7 +210,8 @@ async function handleSermonsAPI(request: Request, env: Env): Promise<Response> {
 
     // PATCH /api/sermons/:id
     if (request.method === 'PATCH' && sermonId) {
-      const requestingUserId = request.headers.get('X-User-Id') || url.searchParams.get('userId') || 'guest';
+      const auth = await resolveAuth(request, env);
+      const requestingUserId = auth.authenticated ? auth.userId : (request.headers.get('X-User-Id') || url.searchParams.get('userId') || 'guest');
       const sermon = await env.DB.prepare('SELECT user_id FROM sermons WHERE id = ?').bind(sermonId).first() as any;
       
       if (!sermon) {
@@ -499,21 +509,40 @@ function isAssetRequest(path: string): boolean {
 // ── Gemini AI Proxy Handler ────────────────────────────────────────────────────
 
 async function handleGeminiProxyAPI(request: Request, env: Env): Promise<Response> {
+  if (!env.GEMINI_API_KEY) {
+    return new Response(JSON.stringify({ error: 'Gemini API not configured' }), { status: 503 });
+  }
+
+  const auth = await resolveAuth(request, env);
+  const rateKey = clientRateLimitKey(request, auth.userId);
+  const maxReq = auth.authenticated ? 30 : 8;
+  const limit = checkRateLimit(rateKey, maxReq, 60_000);
+  if (!limit.allowed) {
+    return new Response(
+      JSON.stringify({ error: 'Rate limit exceeded', retryAfterSec: limit.retryAfterSec }),
+      { status: 429, headers: { 'Retry-After': String(limit.retryAfterSec ?? 60) } },
+    );
+  }
+
+  const contentLength = request.headers.get('Content-Length');
+  if (contentLength && parseInt(contentLength, 10) > GEMINI_PROXY_MAX_BODY_BYTES) {
+    return new Response(JSON.stringify({ error: 'Request body too large' }), { status: 413 });
+  }
+
   const url = new URL(request.url);
   const targetUrl = `https://generativelanguage.googleapis.com${url.pathname}${url.search}`;
-  
+
   const headers = new Headers(request.headers);
-  headers.set('x-goog-api-key', env.GEMINI_API_KEY || '');
+  headers.set('x-goog-api-key', env.GEMINI_API_KEY);
   headers.delete('host');
-  
-  // Forward request body if method is not GET/HEAD
+
   const hasBody = request.method !== 'GET' && request.method !== 'HEAD';
   const response = await fetch(targetUrl, {
     method: request.method,
-    headers: headers,
+    headers,
     body: hasBody ? request.body : undefined,
   });
-  
+
   return response;
 }
 

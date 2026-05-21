@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS sermons (
     title TEXT NOT NULL,
     speaker TEXT,
     date_preached DATETIME,
-    source_type TEXT CHECK(source_type IN ('youtube', 'upload', 'text')) NOT NULL,
+    source_type TEXT CHECK(source_type IN ('youtube', 'upload', 'text', 'live')) NOT NULL,
     source_url TEXT,
     audio_key TEXT,
     clean_transcript TEXT,
