@@ -46,9 +46,12 @@ export const ProcessingOverlay: React.FC<ProcessingOverlayProps> = ({
         </div>
       </div>
 
-      <h2 className="text-3xl font-serif font-black text-amber-50 mb-4 tracking-tight">Processing Sermon</h2>
+      <h2 className="text-3xl font-serif font-black text-amber-50 mb-2 tracking-tight">Processing Sermon</h2>
+      <p className="text-amber-200/50 text-sm font-serif italic mb-6 max-w-md text-center px-6">
+        Like a voice memo: we transcribe your recording to text, then build your study guide. Long sermons can take 15–20 minutes.
+      </p>
 
-      <div className="h-8 overflow-hidden text-center">
+      <div className="min-h-[2rem] overflow-hidden text-center max-w-lg px-6">
         <AnimatePresence mode="wait">
           <motion.p
             key={processingStatus ?? step}

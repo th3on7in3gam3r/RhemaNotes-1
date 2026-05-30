@@ -27,7 +27,7 @@ import { buildMetaHTML, buildSermonMeta, HOME_META, HISTORY_META } from '../serv
 import Stripe from 'stripe';
 import { getYouTubeTranscript } from '../services/youtubeService';
 import { GEMINI_PROXY_MAX_BODY_BYTES } from '../constants/ai';
-import { resolveAuth, enforceWriteUserId } from './auth';
+import { resolveAuth, enforceWriteUserId, isPaidTier } from './auth';
 import { checkRateLimit, clientRateLimitKey } from './rateLimit';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -163,11 +163,12 @@ async function handleSermonsAPI(request: Request, env: Env): Promise<Response> {
     // POST /api/sermons — create a sermon
     if (request.method === 'POST') {
       const auth = await resolveAuth(request, env);
-      const data: any = await request.json();
-      const id = data.id || crypto.randomUUID();
-      const userId = enforceWriteUserId(auth, data.user_id);
+      const data: { user_id?: string; [key: string]: unknown } = await request.json();
+      const id = (data.id as string) || crypto.randomUUID();
+      const userId = enforceWriteUserId(auth, data.user_id as string | undefined);
       const allowedSources = ['youtube', 'upload', 'text', 'live'];
-      const sourceType = allowedSources.includes(data.source_type) ? data.source_type : 'text';
+      const sourceTypeRaw = String(data.source_type || 'text');
+      const sourceType = allowedSources.includes(sourceTypeRaw) ? sourceTypeRaw : 'text';
 
       await env.DB.prepare(
         `INSERT INTO sermons (id, user_id, title, main_topic, clean_transcript, source_type, summary_json, created_at, updated_at)
@@ -366,23 +367,15 @@ async function verifyStripeWebhook(body: string, signature: string, secret: stri
 // ── User Tier API ─────────────────────────────────────────────────────────────
 
 async function handleUserAPI(request: Request, env: Env): Promise<Response> {
-  const url = new URL(request.url);
-  const userId = url.searchParams.get('userId');
   const cors = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' };
+  const auth = await resolveAuth(request, env);
 
-  if (!userId || !env.DB) {
-    return new Response(JSON.stringify({ tier: 'free' }), { headers: cors });
+  // Paid tier (pro / church) comes from D1 for every verified signed-in user — not a single admin email.
+  if (auth.authenticated) {
+    return new Response(JSON.stringify({ tier: auth.tier, userId: auth.userId }), { headers: cors });
   }
 
-  try {
-    const result = await env.DB.prepare(
-      'SELECT tier FROM users WHERE id = ?'
-    ).bind(userId).first<{ tier: string }>();
-    
-    return new Response(JSON.stringify({ tier: result?.tier || 'free' }), { headers: cors });
-  } catch {
-    return new Response(JSON.stringify({ tier: 'free' }), { headers: cors });
-  }
+  return new Response(JSON.stringify({ tier: 'free' }), { headers: cors });
 }
 
 // ── Static Assets & Robots ───────────────────────────────────────────────────
@@ -510,18 +503,34 @@ function isAssetRequest(path: string): boolean {
 
 async function handleGeminiProxyAPI(request: Request, env: Env): Promise<Response> {
   if (!env.GEMINI_API_KEY) {
-    return new Response(JSON.stringify({ error: 'Gemini API not configured' }), { status: 503 });
+    return new Response(JSON.stringify({ error: 'Gemini API not configured on server' }), { status: 503 });
+  }
+
+  if (!env.CLERK_SECRET_KEY) {
+    console.warn('CLERK_SECRET_KEY missing — signed-in users cannot be verified for AI proxy');
   }
 
   const auth = await resolveAuth(request, env);
   const rateKey = clientRateLimitKey(request, auth.userId);
-  const maxReq = auth.authenticated ? 30 : 8;
-  const limit = checkRateLimit(rateKey, maxReq, 60_000);
-  if (!limit.allowed) {
-    return new Response(
-      JSON.stringify({ error: 'Rate limit exceeded', retryAfterSec: limit.retryAfterSec }),
-      { status: 429, headers: { 'Retry-After': String(limit.retryAfterSec ?? 60) } },
-    );
+
+  // Harvest / Vine: no app-side rate cap (long sermons = many transcription chunks)
+  // Signed-in free: generous limit. Guests: strict limit.
+  const skipRateLimit = auth.authenticated && isPaidTier(auth.tier);
+  if (!skipRateLimit) {
+    const maxReq = auth.authenticated ? 100 : 25;
+    const limit = checkRateLimit(rateKey, maxReq, 60_000);
+    if (!limit.allowed) {
+      return new Response(
+        JSON.stringify({
+          error: 'Rate limit exceeded',
+          retryAfterSec: limit.retryAfterSec,
+          hint: auth.authenticated
+            ? 'Long sermon processing sends many AI requests. Wait a minute and try again.'
+            : 'Sign in for higher limits on long recordings.',
+        }),
+        { status: 429, headers: { 'Retry-After': String(limit.retryAfterSec ?? 60) } },
+      );
+    }
   }
 
   const contentLength = request.headers.get('Content-Length');
@@ -543,7 +552,10 @@ async function handleGeminiProxyAPI(request: Request, env: Env): Promise<Respons
     body: hasBody ? request.body : undefined,
   });
 
-  return response;
+  const out = new Response(response.body, response);
+  out.headers.set('X-Rhema-Auth', auth.authenticated ? 'verified' : 'guest');
+  out.headers.set('X-Rhema-Tier', auth.tier);
+  return out;
 }
 
 async function handleYouTubeTranscriptAPI(request: Request, env: Env): Promise<Response> {

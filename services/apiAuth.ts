@@ -5,6 +5,13 @@ export function setAuthTokenGetter(getter: () => Promise<string | null>): void {
   tokenGetter = getter;
 }
 
+/** Returns false if user appears signed in but Clerk token is missing (common cause of "guest" AI limits). */
+export async function ensureAuthToken(): Promise<boolean> {
+  if (!tokenGetter) return false;
+  const token = await tokenGetter();
+  return Boolean(token?.length);
+}
+
 export async function getAuthHeaders(extra?: Record<string, string>): Promise<HeadersInit> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -21,7 +28,9 @@ export async function authFetch(input: RequestInfo | URL, init?: RequestInit): P
   const headers = new Headers(init?.headers);
   if (tokenGetter) {
     const token = await tokenGetter();
-    if (token) headers.set('Authorization', `Bearer ${token}`);
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
   }
   return fetch(input, { ...init, headers });
 }

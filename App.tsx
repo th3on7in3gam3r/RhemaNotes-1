@@ -99,10 +99,18 @@ function App() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const { user, isLoaded: clerkLoaded } = useUser();
   const { getToken } = useAuth();
+  const { tier, isPro, isLoadingTier, getLimit } = useSubscription();
 
   useEffect(() => {
-    setAuthTokenGetter(() => getToken());
-  }, [getToken]);
+    if (!clerkLoaded) return;
+    setAuthTokenGetter(async () => {
+      try {
+        return await getToken();
+      } catch {
+        return null;
+      }
+    });
+  }, [getToken, clerkLoaded, user?.id]);
 
   const onSermonSaved = useCallback((item: SermonHistoryItem, summary: SermonSummaryOutput) => {
     setHistory((prev) => [item, ...prev]);
@@ -126,6 +134,9 @@ function App() {
     userId: user?.id || 'guest',
     includeReflection,
     onSaved: onSermonSaved,
+    maxAudioMinutes: getLimit('maxAudioMinutes') as number,
+    tier,
+    isSignedIn: Boolean(user?.id),
   });
 
   useEffect(() => {
@@ -141,8 +152,6 @@ function App() {
     const { outcome } = await deferredPrompt.userChoice;
     if (outcome === 'accepted') setDeferredPrompt(null);
   };
-
-  const { tier, isPro, isLoadingTier } = useSubscription();
 
   useEffect(() => {
     // Wait for Clerk to finish loading so we never fetch history as 'guest'

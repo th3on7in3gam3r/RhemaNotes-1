@@ -14,3 +14,19 @@ command = "npm run build"
 binding = "DB"
 database_name = "rhemanotes-db"
 database_id = "2a7e39cf-71ff-4b08-b7ea-36d7585d3575"
+
+# Match Cloudflare dashboard → Settings → Observability (logs enabled)
+[observability]
+enabled = false
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[observability.traces]
+enabled = false
+persist = true
+head_sampling_rate = 1

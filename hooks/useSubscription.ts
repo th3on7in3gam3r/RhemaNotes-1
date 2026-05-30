@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useUser } from '@clerk/react';
 import { UserTier, TIER_LIMITS, canUseFeature, FeatureLimits } from '../constants/features';
+import { authFetch } from '../services/apiAuth';
 
 export const useSubscription = () => {
   const { user, isLoaded } = useUser();
@@ -9,13 +10,6 @@ export const useSubscription = () => {
 
   useEffect(() => {
     if (!isLoaded) return;
-
-    // Admin override
-    if (user?.primaryEmailAddress?.emailAddress === 'jerlessm@gmail.com') {
-      setTier('church');
-      setIsLoadingTier(false);
-      return;
-    }
 
     if (!user) {
       setTier('free');
@@ -26,9 +20,9 @@ export const useSubscription = () => {
     // Fetch real tier from DB
     const fetchTier = async () => {
       try {
-        const res = await fetch(`/api/user?userId=${user.id}`);
+        const res = await authFetch(`/api/user?userId=${user.id}`);
         if (res.ok) {
-          const data = await res.json() as { tier: string };
+          const data = (await res.json()) as { tier: string };
           if (data.tier === 'pro' || data.tier === 'church' || data.tier === 'free') {
             setTier(data.tier as UserTier);
           }

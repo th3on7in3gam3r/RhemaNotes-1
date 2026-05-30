@@ -1,6 +1,14 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { MASTER_SERMON_PROCESSING_PROMPT } from '../constants';
-import { GEMINI_MODEL, AUDIO_CHUNK_SECONDS } from '../constants/ai';
+import {
+  GEMINI_MODEL,
+  AUDIO_CHUNK_SECONDS,
+  AUDIO_TARGET_SAMPLE_RATE,
+  TRANSCRIPTION_CHUNK_DELAY_MS,
+  MAX_TRANSCRIPT_CHARS_FOR_STUDY_GUIDE,
+  TRANSCRIPTION_MAX_OUTPUT_TOKENS,
+} from '../constants/ai';
+import { savePartialTranscript, clearPartialTranscript } from './transcriptCache';
 import { SermonSummaryOutput } from '../types';
 import { authFetch } from './apiAuth';
 
@@ -159,17 +167,47 @@ Rules:
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
+/** Shrink very long transcripts for the study-guide API call; full text is kept in the saved result. */
+export function trimTranscriptForStudyGuide(transcript: string): string {
+  const t = transcript.trim();
+  if (t.length <= MAX_TRANSCRIPT_CHARS_FOR_STUDY_GUIDE) return t;
+  const headSize = Math.floor(MAX_TRANSCRIPT_CHARS_FOR_STUDY_GUIDE * 0.72);
+  const tailSize = Math.floor(MAX_TRANSCRIPT_CHARS_FOR_STUDY_GUIDE * 0.22);
+  return (
+    `${t.slice(0, headSize)}\n\n` +
+    `[… middle of sermon omitted from this analysis request due to length — ` +
+    `${Math.round(t.length / 1000)}k characters total …]\n\n` +
+    `${t.slice(-tailSize)}`
+  );
+}
+
 export async function processSermonTranscript(
   transcript: string,
   includeReflection: boolean,
   signal?: AbortSignal,
 ): Promise<SermonSummaryOutput> {
   assertNotAborted(signal);
-  return callGemini(
-    [{ text: MASTER_SERMON_PROCESSING_PROMPT(transcript, includeReflection) }],
+  const fullTranscript = transcript.trim();
+  const forPrompt = trimTranscriptForStudyGuide(fullTranscript);
+  const result = await callGemini(
+    [{ text: MASTER_SERMON_PROCESSING_PROMPT(forPrompt, includeReflection) }],
     includeReflection,
     signal,
   );
+  if (fullTranscript.length > 200) {
+    result.clean_transcript = fullTranscript;
+  }
+  return result;
+}
+
+export function estimateTranscriptionMinutes(chunkCount: number): number {
+  return Math.max(2, Math.ceil(chunkCount * 1.5));
+}
+
+/** Rough chunk count from recorded file size (~32 kbps live encoding). */
+export function estimateChunksFromFile(file: File): number {
+  const durationSec = file.size / 4000;
+  return Math.max(1, Math.ceil(durationSec / AUDIO_CHUNK_SECONDS));
 }
 
 export async function transcribeSermonAudio(
@@ -178,23 +216,46 @@ export async function transcribeSermonAudio(
   signal?: AbortSignal,
 ): Promise<string> {
   assertNotAborted(signal);
+  onProgress?.('Preparing your recording for transcription…');
   const chunks = await prepareTranscriptionChunks(file, onProgress, signal);
+  const total = chunks.length;
+  const estMin = estimateTranscriptionMinutes(total);
   const parts: string[] = [];
 
-  for (let i = 0; i < chunks.length; i++) {
+  await clearPartialTranscript();
+
+  for (let i = 0; i < total; i++) {
     assertNotAborted(signal);
-    if (chunks.length > 1) {
-      onProgress?.(`Transcribing part ${i + 1} of ${chunks.length}…`);
+
+    if (i > 0) {
+      onProgress?.(
+        total > 1
+          ? `Transcribing part ${i + 1} of ${total} (~${estMin} min total for this sermon)…`
+          : 'Transcribing your sermon recording…',
+      );
+      await sleep(TRANSCRIPTION_CHUNK_DELAY_MS, signal);
+    } else if (total > 1) {
+      onProgress?.(
+        `Transcribing part 1 of ${total} — about ${estMin} minutes for a full sermon. Please keep this tab open.`,
+      );
     } else {
       onProgress?.('Transcribing your sermon recording…');
     }
 
     const chunkPrompt =
-      chunks.length > 1
-        ? `${TRANSCRIPTION_PROMPT}\n\nThis is part ${i + 1} of ${chunks.length} of one continuous sermon. Transcribe only this segment.`
+      total > 1
+        ? `${TRANSCRIPTION_PROMPT}\n\nThis is part ${i + 1} of ${total} of one continuous sermon. Transcribe only this segment. Do not add introductions.`
         : TRANSCRIPTION_PROMPT;
 
-    const base64Data = await fileToBase64(chunks[i].blob);
+    const chunkBlob = chunks[i].blob;
+    const chunkSizeMb = chunkBlob.size / (1024 * 1024);
+    if (chunkSizeMb > 18) {
+      throw new Error(
+        `Audio segment ${i + 1} is too large (${chunkSizeMb.toFixed(1)} MB). Try a shorter recording or split the service into parts.`,
+      );
+    }
+
+    const base64Data = await fileToBase64(chunkBlob);
     const text = await withGeminiRetry(
       async () => {
         const response = await ai.models.generateContent({
@@ -206,18 +267,31 @@ export async function transcribeSermonAudio(
               { inlineData: { data: base64Data, mimeType: chunks[i].mimeType } },
             ],
           }],
-          config: { maxOutputTokens: 8192 },
+          config: { maxOutputTokens: TRANSCRIPTION_MAX_OUTPUT_TOKENS },
         });
-        const transcript = response.text?.trim();
-        if (!transcript) throw new Error('Empty transcription segment');
-        return transcript;
+        const segment = response.text?.trim();
+        if (!segment) throw new Error(`Empty transcription for part ${i + 1} of ${total}`);
+        return segment;
       },
       signal,
+      4,
     );
     parts.push(text);
+
+    const combined = parts.join('\n\n');
+    await savePartialTranscript({
+      transcript: combined,
+      completedChunks: i + 1,
+      totalChunks: total,
+      fileName: file.name,
+      savedAt: Date.now(),
+    });
   }
 
-  return parts.join('\n\n');
+  const full = parts.join('\n\n');
+  await clearPartialTranscript();
+  if (!full.trim()) throw new Error('Transcription produced no text. Check microphone volume and try again.');
+  return full;
 }
 
 export async function processSermonFile(
@@ -286,9 +360,24 @@ function formatGeminiError(error: unknown, prefix: string): Error {
   if (msg.includes('AbortError') || msg.includes('cancelled')) {
     return new Error('Processing was cancelled.');
   }
-  if (msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('quota')) {
+  if (msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('quota') || msg.includes('Rate limit')) {
     return new Error(
-      'Gemini API quota exceeded. Wait a minute and try again, or enable billing in Google AI Studio.',
+      'Too many AI requests in a short time (common with 30+ minute sermons). Wait 1–2 minutes, then try again. Sign in for higher limits.',
+    );
+  }
+  if (msg.includes('413') || msg.includes('too large') || msg.includes('payload')) {
+    return new Error(
+      'Recording is too large for one upload. Try recording in two shorter sessions, or use a stronger Wi‑Fi connection.',
+    );
+  }
+  if (msg.includes('Failed to fetch') || msg.includes('network') || msg.includes('Load failed')) {
+    return new Error(
+      'Network error while contacting AI. Keep this tab open and on Wi‑Fi — long sermons can take 10–20 minutes to transcribe.',
+    );
+  }
+  if (msg.includes('decodeAudioData') || msg.includes('Web Audio')) {
+    return new Error(
+      'Could not read this recording in the browser. Try Chrome or Safari, or record a slightly shorter clip.',
     );
   }
   return new Error(`${prefix}: ${msg}`);
@@ -308,31 +397,54 @@ async function prepareTranscriptionChunks(
 ): Promise<AudioChunk[]> {
   assertNotAborted(signal);
 
-  try {
-    const audioBuffer = await decodeAudioFile(file);
-    const duration = audioBuffer.duration;
+  onProgress?.('Loading and optimizing audio (this may take a minute for long sermons)…');
+  const decoded = await decodeAudioFile(file);
+  const mono8k = await resampleTo8kHzMono(decoded, signal);
+  const duration = mono8k.duration;
+  const chunkCount = Math.max(1, Math.ceil(duration / AUDIO_CHUNK_SECONDS));
+  const samplesPerChunk = AUDIO_TARGET_SAMPLE_RATE * AUDIO_CHUNK_SECONDS;
+  const channel = mono8k.getChannelData(0);
+  const chunks: AudioChunk[] = [];
 
-    if (duration <= AUDIO_CHUNK_SECONDS) {
-      const { blob, mimeType } = await prepareAudioForGemini(file, onProgress);
-      return [{ blob, mimeType }];
-    }
-
-    onProgress?.('Splitting long recording for transcription…');
-    const chunkCount = Math.ceil(duration / AUDIO_CHUNK_SECONDS);
-    const chunks: AudioChunk[] = [];
-
-    for (let i = 0; i < chunkCount; i++) {
-      assertNotAborted(signal);
-      const start = i * AUDIO_CHUNK_SECONDS;
-      const end = Math.min((i + 1) * AUDIO_CHUNK_SECONDS, duration);
-      const slice = sliceAudioBuffer(audioBuffer, start, end);
-      chunks.push({ blob: audioBufferToWav(slice), mimeType: 'audio/wav' });
-    }
-    return chunks;
-  } catch {
-    const { blob, mimeType } = await prepareAudioForGemini(file, onProgress);
-    return [{ blob, mimeType }];
+  if (chunkCount > 1) {
+    onProgress?.(`Splitting ${Math.round(duration / 60)} min recording into ${chunkCount} parts…`);
   }
+
+  for (let i = 0; i < chunkCount; i++) {
+    assertNotAborted(signal);
+    const startSample = i * samplesPerChunk;
+    const endSample = Math.min(startSample + samplesPerChunk, channel.length);
+    const length = endSample - startSample;
+    if (length <= 0) continue;
+
+    const sliceBuffer = new AudioBuffer({
+      length,
+      numberOfChannels: 1,
+      sampleRate: AUDIO_TARGET_SAMPLE_RATE,
+    });
+    sliceBuffer.getChannelData(0).set(channel.subarray(startSample, endSample));
+    chunks.push({ blob: audioBufferToWav(sliceBuffer), mimeType: 'audio/wav' });
+  }
+
+  if (chunks.length === 0) {
+    throw new Error('Recording appears empty. Please record again with the microphone unobstructed.');
+  }
+  return chunks;
+}
+
+async function resampleTo8kHzMono(buffer: AudioBuffer, signal?: AbortSignal): Promise<AudioBuffer> {
+  assertNotAborted(signal);
+  const duration = buffer.duration;
+  const offline = new OfflineAudioContext(
+    1,
+    Math.ceil(AUDIO_TARGET_SAMPLE_RATE * duration),
+    AUDIO_TARGET_SAMPLE_RATE,
+  );
+  const source = offline.createBufferSource();
+  source.buffer = buffer;
+  source.connect(offline.destination);
+  source.start(0);
+  return offline.startRendering();
 }
 
 async function decodeAudioFile(file: File): Promise<AudioBuffer> {
@@ -347,35 +459,15 @@ async function decodeAudioFile(file: File): Promise<AudioBuffer> {
   }
 }
 
-function sliceAudioBuffer(buffer: AudioBuffer, startSec: number, endSec: number): AudioBuffer {
-  const sampleRate = buffer.sampleRate;
-  const startSample = Math.floor(startSec * sampleRate);
-  const endSample = Math.min(Math.floor(endSec * sampleRate), buffer.length);
-  const length = endSample - startSample;
-  const offline = new OfflineAudioContext(1, length, sampleRate);
-  const sliced = offline.createBuffer(1, length, sampleRate);
-  sliced.getChannelData(0).set(buffer.getChannelData(0).subarray(startSample, endSample));
-  return sliced;
-}
-
 async function prepareAudioForGemini(
   file: File,
   onProgress?: GeminiProgressCallback,
+  signal?: AbortSignal,
 ): Promise<{ blob: File | Blob; mimeType: string }> {
-  let blob: File | Blob = file;
-  let mimeType = file.type || 'audio/webm';
-
-  if (file.type.startsWith('video/') || file.size > 8 * 1024 * 1024) {
-    try {
-      onProgress?.('Preparing audio for transcription…');
-      blob = await extractAudioToWav(file);
-      mimeType = 'audio/wav';
-    } catch (err) {
-      console.warn('Failed to optimize audio, using original file:', err);
-    }
-  }
-
-  return { blob, mimeType };
+  onProgress?.('Optimizing audio…');
+  const decoded = await decodeAudioFile(file);
+  const mono8k = await resampleTo8kHzMono(decoded, signal);
+  return { blob: audioBufferToWav(mono8k), mimeType: 'audio/wav' };
 }
 
 async function callGemini(
@@ -413,9 +505,10 @@ async function callGemini(
 
 // ── Web Audio WAV helpers ─────────────────────────────────────────────────────
 
-async function extractAudioToWav(file: File): Promise<Blob> {
+async function extractAudioToWav(file: File, signal?: AbortSignal): Promise<Blob> {
   const buffer = await decodeAudioFile(file);
-  return audioBufferToWav(buffer);
+  const mono8k = await resampleTo8kHzMono(buffer, signal);
+  return audioBufferToWav(mono8k);
 }
 
 function audioBufferToWav(buffer: AudioBuffer): Blob {

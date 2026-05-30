@@ -24,11 +24,14 @@ npm run test:gemini
 ## Deploy checklist (Cloudflare Workers)
 
 1. **Build:** `npm run build`
-2. **Secrets** (Wrangler / Cloudflare dashboard):
-   - `GEMINI_API_KEY`
-   - `CLERK_SECRET_KEY`
+2. **Secrets** (Cloudflare dashboard → Workers → Settings → Variables):
+   - `GEMINI_API_KEY` — Google AI (all users share this quota)
+   - `CLERK_SECRET_KEY` — **Required** so signed-in users are verified; paid tier (`pro` / `church`) is read from D1 for everyone
    - `STRIPE_SECRET_KEY`
    - `STRIPE_WEBHOOK_SECRET`
+
+   **Build variables** (same dashboard → Build, or local `.env.local` for `npm run build`):
+   - `VITE_CLERK_PUBLISHABLE_KEY` — must be present at **build time** (a Worker secret named `VITE_*` does not inject into the JS bundle)
 3. **Deploy:** `npx wrangler deploy`
 4. **D1:** If the database predates Live Recording, apply migration 001:
    ```bash

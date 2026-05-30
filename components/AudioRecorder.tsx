@@ -23,6 +23,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({ onStopRecording, o
   const [liveNotes, setLiveNotes] = useState<UserNote[]>([]);
   const liveNotesRef = useRef<UserNote[]>([]);
   const [currentDraftNote, setCurrentDraftNote] = useState<string>('');
+  const [isFinishing, setIsFinishing] = useState(false);
   const wakeLockRef = useRef<any>(null);
 
   const requestWakeLock = async () => {
@@ -201,6 +202,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({ onStopRecording, o
 
       mediaRecorder.onstop = async () => {
         setIsRecording(false);
+        setIsFinishing(true);
         stopVisualizer();
         releaseWakeLock();
         if (intervalRef.current) {
@@ -229,10 +231,9 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({ onStopRecording, o
           await onStopRecording('', liveNotesRef.current, audioFile);
           await clearLiveDraft();
         } catch (err) {
-          // onStopRecording sets UI error state; swallow here so onstop doesn't reject uncaught
           console.error('Error finishing live recording:', err);
         } finally {
-          // Guarantee microphone track release to avoid system locking issues
+          setIsFinishing(false);
           if (streamRef.current) {
             streamRef.current.getTracks().forEach(track => track.stop());
             streamRef.current = null;
@@ -240,7 +241,8 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({ onStopRecording, o
         }
       };
 
-      mediaRecorder.start();
+      // Timeslice: flush audio every 10s so long sermons don't lose everything in memory
+      mediaRecorder.start(10_000);
     } catch (err) {
       console.error('Error starting recording:', err);
       alert('Could not start recording. Please ensure microphone access is granted.');
@@ -330,9 +332,14 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({ onStopRecording, o
                 </button>
               </div>
 
+              {isRecording && recordingDuration >= 30 * 60 && recordingDuration < LONG_RECORDING_WARN_SECONDS && (
+                <p className="mt-4 text-sm font-bold text-indigo-700 bg-indigo-50 px-4 py-2 rounded-xl border border-indigo-100">
+                  30+ minutes recorded — transcription may take 10–15 minutes after you finish.
+                </p>
+              )}
               {isRecording && recordingDuration >= LONG_RECORDING_WARN_SECONDS && (
                 <p className="mt-4 text-sm font-bold text-amber-700 bg-amber-50 px-4 py-2 rounded-xl border border-amber-200">
-                  Long recordings may take several minutes to transcribe. Consider shorter segments if possible.
+                  Long sermon — expect ~15–20 minutes to transcribe and build your study guide. Stay on Wi‑Fi with this tab open.
                 </p>
               )}
 
@@ -375,13 +382,15 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({ onStopRecording, o
             </div>
 
             <div className="flex flex-col sm:flex-row w-full gap-4">
-              {isRecording && (
+              {(isRecording || isFinishing) && (
                 <button
                   onClick={stopRecording}
-                  disabled={isLoading}
-                  className="btn-sacred-primary flex-1 py-4 bg-rose-600 hover:bg-rose-700"
+                  disabled={isLoading || isFinishing}
+                  className="btn-sacred-primary flex-1 py-4 bg-rose-600 hover:bg-rose-700 disabled:opacity-80"
                 >
-                  Complete Scribing
+                  {isFinishing || isLoading
+                    ? 'Finishing recording → transcribing…'
+                    : 'Finish Recording → Transcribe'}
                 </button>
               )}
               <button

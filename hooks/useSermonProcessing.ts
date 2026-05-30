@@ -5,9 +5,13 @@ import {
   processSermonTranscript,
   processSermonFile,
   transcribeSermonAudio,
+  estimateTranscriptionMinutes,
+  estimateChunksFromFile,
 } from '../services/geminiService';
 import { saveSermonToHistory } from '../services/storageService';
 import { savePendingTranscript, clearPendingTranscript } from '../services/transcriptCache';
+import { ensureAuthToken } from '../services/apiAuth';
+import type { UserTier } from '../constants/features';
 import type { SermonSourceType } from '../types/source';
 import type { SermonHistoryItem, SermonSummaryOutput, UserNote } from '../types';
 
@@ -22,12 +26,22 @@ interface UseSermonProcessingOptions {
   userId: string;
   includeReflection: boolean;
   onSaved: (item: SermonHistoryItem, summary: SermonSummaryOutput) => void;
+  maxAudioMinutes?: number;
+  tier?: UserTier;
+  isSignedIn?: boolean;
+}
+
+function estimateRecordingMinutes(file: File): number {
+  return file.size / 4000 / 60;
 }
 
 export function useSermonProcessing({
   userId,
   includeReflection,
   onSaved,
+  maxAudioMinutes = 180,
+  tier = 'free',
+  isSignedIn = false,
 }: UseSermonProcessingOptions) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,12 +55,35 @@ export function useSermonProcessing({
       message.includes('Failed to fetch') ||
       message.includes('network') ||
       message.includes('disconnected');
-    setError(
-      isOffline
-        ? 'Your internet connection was disconnected or timed out. Please verify your connection and try again.'
-        : message,
-    );
-  }, []);
+
+    if (isOffline) {
+      setError(
+        'Your internet connection was disconnected or timed out. Long sermons need a stable connection for 15–20 minutes.',
+      );
+      return;
+    }
+
+    if (
+      isSignedIn &&
+      (message.includes('429') || message.includes('quota') || message.includes('RESOURCE_EXHAUSTED'))
+    ) {
+      setError(
+        'Google AI quota was exceeded for this app (this is separate from your Harvest Church plan). ' +
+          'Wait 1–2 minutes and try again. If it keeps failing, the site admin may need to enable billing in Google AI Studio.',
+      );
+      return;
+    }
+
+    if (message.includes('Rate limit') && isSignedIn && (tier === 'church' || tier === 'pro')) {
+      setError(
+        'Too many AI requests in a short window. Refresh the page, wait one minute, and try again. ' +
+          'If this persists, sign out and sign back in.',
+      );
+      return;
+    }
+
+    setError(message);
+  }, [isSignedIn, tier]);
 
   const saveResult = useCallback(
     async (
@@ -71,7 +108,7 @@ export function useSermonProcessing({
       const controller = beginProcessing();
       setIsLoading(true);
       setError(null);
-      setProcessingStatus('Creating your study guide…');
+      setProcessingStatus('Step 2 of 2: Creating your study guide…');
       try {
         const result = await processSermonTranscript(
           transcript,
@@ -100,7 +137,7 @@ export function useSermonProcessing({
       const controller = beginProcessing();
       setIsLoading(true);
       setError(null);
-      setProcessingStatus('Creating your study guide…');
+      setProcessingStatus('Step 2 of 2: Creating your study guide…');
       try {
         const result = await processSermonTranscript(
           transcript,
@@ -126,18 +163,43 @@ export function useSermonProcessing({
   /** Audio file / live recording — transcribe, then review */
   const processAudioFile = useCallback(
     async (file: File, sourceType: SermonSourceType, liveNotes?: UserNote[]) => {
+      const estMin = estimateRecordingMinutes(file);
+      if (Number.isFinite(maxAudioMinutes) && maxAudioMinutes < Infinity && estMin > maxAudioMinutes) {
+        setError(
+          `This recording is about ${Math.round(estMin)} minutes. Your plan allows up to ${maxAudioMinutes} minutes per recording.`,
+        );
+        return;
+      }
+
+      if (isSignedIn) {
+        const hasToken = await ensureAuthToken();
+        if (!hasToken) {
+          setError(
+            'Your sign-in session could not be verified for AI processing. Refresh the page, sign in again, then retry.',
+          );
+          return;
+        }
+      }
+
       const controller = beginProcessing();
       setIsLoading(true);
       setError(null);
       setPendingReview(null);
       try {
-        setProcessingStatus('Transcribing your sermon recording…');
+        const chunks = estimateChunksFromFile(file);
+        const tierLabel = tier === 'church' ? 'Harvest Church' : tier === 'pro' ? 'Vine' : '';
+        const durationHint =
+          chunks > 1
+            ? `Step 1 of 2: Transcribing ${chunks} parts (~${estimateTranscriptionMinutes(chunks)} min)${tierLabel ? ` · ${tierLabel}` : ''}. Keep this tab open on Wi‑Fi.`
+            : 'Step 1 of 2: Turning your recording into text…';
+        setProcessingStatus(durationHint);
         const transcript = await transcribeSermonAudio(
           file,
           (status) => setProcessingStatus(status),
           controller.signal,
         );
         await savePendingTranscript({ transcript, fileName: file.name, savedAt: Date.now() });
+        setProcessingStatus(undefined);
         setPendingReview({ transcript, file, liveNotes, sourceType });
       } catch (err) {
         handleError(err);
@@ -146,7 +208,7 @@ export function useSermonProcessing({
         setProcessingStatus(undefined);
       }
     },
-    [handleError],
+    [handleError, maxAudioMinutes, tier, isSignedIn],
   );
 
   /** Upload path: optional single-shot without review */
