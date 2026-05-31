@@ -4,6 +4,7 @@ import App from './App';
 import './index.css';
 import { registerSW } from 'virtual:pwa-register';
 import { ClerkProvider } from '@clerk/react';
+import { isClerkConfigured, CLERK_PUBLISHABLE_KEY } from './components/AuthNav';
 
 const updateSW = registerSW({
   onNeedRefresh() {
@@ -22,9 +23,16 @@ if (!rootElement) {
 }
 
 const root = ReactDOM.createRoot(rootElement);
+
+if (!isClerkConfigured) {
+  console.error(
+    'VITE_CLERK_PUBLISHABLE_KEY is missing from the build. Sign-in buttons will not work until you rebuild with that variable in .env.local or Cloudflare build settings.',
+  );
+}
+
 root.render(
   <React.StrictMode>
-    <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY}>
+    <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY || ''}>
       <App />
     </ClerkProvider>
   </React.StrictMode>

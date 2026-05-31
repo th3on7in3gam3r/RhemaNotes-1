@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { History, Home, BookOpen, Moon, Sun, Sparkles, MessageCircle, Heart, Crown, User, PenLine } from 'lucide-react';
-import { Show, SignInButton, SignUpButton, UserButton } from '@clerk/react';
+import { History, Home, BookOpen, Moon, Sun, Sparkles, MessageCircle, PenLine, User } from 'lucide-react';
+import { AuthNav } from './AuthNav';
 import logoImg from '../logo.png';
 
 interface LayoutProps {
@@ -136,33 +136,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
 
             <div className="w-px h-5 bg-indigo-100 mx-2" />
 
-            {/* Clerk Auth */}
-            <Show when="signed-out">
-              <SignInButton mode="modal">
-                <button className="px-4 py-2 text-sm font-bold text-indigo-900/60 hover:text-indigo-900 hover:bg-indigo-50 rounded-xl transition-all">
-                  Sign In
-                </button>
-              </SignInButton>
-              <SignUpButton mode="modal">
-                <button className="ml-1 px-4 py-2 text-sm font-bold bg-indigo-900 text-amber-100 rounded-xl hover:bg-indigo-800 transition-all">
-                  Sign Up
-                </button>
-              </SignUpButton>
-            </Show>
-            <Show when="signed-in">
-              <div className="flex items-center bg-white/50 p-1.5 rounded-[20px] border border-indigo-50/50 shadow-sm space-x-1">
-                <button 
-                  onClick={() => onNavigate('profile')} 
-                  className={`flex items-center space-x-2 px-4 py-2 rounded-2xl text-sm font-bold transition-all ${currentScreen === 'profile' ? 'bg-amber-100 text-amber-900 shadow-sm' : 'text-indigo-900/50 hover:text-indigo-900 hover:bg-indigo-50/50'}`}
-                >
-                  <User className={`w-4 h-4 ${currentScreen === 'profile' ? 'text-amber-600' : ''}`} />
-                  <span>Dashboard</span>
-                </button>
-                <div className="px-2">
-                  <UserButton />
-                </div>
-              </div>
-            </Show>
+            <AuthNav variant="desktop" onNavigate={onNavigate} currentScreen={currentScreen} />
           </nav>
 
           {/* Mobile Actions: Clerk Auth & Theme Toggle */}
@@ -175,16 +149,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
               {dark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
             <div className="w-px h-4 bg-indigo-100/80" />
-            <Show when="signed-out">
-              <SignInButton mode="modal">
-                <button className="px-3 py-1.5 text-xs font-black bg-indigo-950 text-amber-100 rounded-xl hover:bg-indigo-900 active:scale-95 transition-all shadow-md">
-                  Sign In
-                </button>
-              </SignInButton>
-            </Show>
-            <Show when="signed-in">
-              <UserButton />
-            </Show>
+            <AuthNav variant="mobile" onNavigate={onNavigate} currentScreen={currentScreen} />
           </div>
         </div>
       </header>
