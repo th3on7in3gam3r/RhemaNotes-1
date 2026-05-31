@@ -165,8 +165,12 @@ export function useSermonProcessing({
     async (file: File, sourceType: SermonSourceType, liveNotes?: UserNote[]) => {
       const estMin = estimateRecordingMinutes(file);
       if (Number.isFinite(maxAudioMinutes) && maxAudioMinutes < Infinity && estMin > maxAudioMinutes) {
+        const planName = tier === 'church' ? 'The Harvest' : tier === 'pro' ? 'The Vine' : 'The Seed';
         setError(
-          `This recording is about ${Math.round(estMin)} minutes. Your plan allows up to ${maxAudioMinutes} minutes per recording.`,
+          `This recording is about ${Math.round(estMin)} minutes. ${planName} allows up to ${maxAudioMinutes} minutes per recording.` +
+            (tier === 'free'
+              ? ' Upgrade to The Vine (120 min) or The Harvest (180 min), or open Profile → "Already paid? Refresh plan" if you subscribed already.'
+              : ''),
         );
         return;
       }

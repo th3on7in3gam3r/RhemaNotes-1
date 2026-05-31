@@ -95,11 +95,13 @@ function App() {
   const [savedScriptures, setSavedScriptures] = useState<SavedScripture[]>(() => getSavedScriptures());
   const [initialUploadMode, setInitialUploadMode] = useState<'text' | 'file'>('text');
   
+  const [checkoutSessionId, setCheckoutSessionId] = useState<string | null>(null);
+  
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const { user, isLoaded: clerkLoaded } = useUser();
   const { getToken } = useAuth();
-  const { tier, isPro, isLoadingTier, getLimit } = useSubscription();
+  const { tier, isPro, isLoadingTier, getLimit, refreshTier } = useSubscription();
 
   useEffect(() => {
     if (!clerkLoaded) return;
@@ -179,6 +181,7 @@ function App() {
     // Detect Stripe success redirect
     const params = new URLSearchParams(window.location.search);
     if (params.get('session_id')) {
+      setCheckoutSessionId(params.get('session_id'));
       setCurrentScreen('success');
       // Clean URL without reloading
       window.history.replaceState({}, '', window.location.pathname);
@@ -572,7 +575,13 @@ function App() {
         );
 
       case 'success':
-        return <PaymentSuccess onGoHome={handleGoHome} tier={tier === 'free' ? 'pro' : tier} />;
+        return (
+          <PaymentSuccess
+            onGoHome={handleGoHome}
+            sessionId={checkoutSessionId}
+            onActivatePlan={(sessionId) => refreshTier({ sessionId: sessionId || undefined, forceStripeSync: true })}
+          />
+        );
 
       case 'terms':
         return <TermsOfService onBack={handleGoHome} />;
@@ -586,6 +595,7 @@ function App() {
             onBack={handleGoHome}
             tier={tier}
             onManageSubscription={handleManageSubscription}
+            onRefreshPlan={() => refreshTier({ forceStripeSync: true })}
             savedScriptures={savedScriptures}
             onScripturesChange={() => setSavedScriptures(getSavedScriptures())}
             stats={{

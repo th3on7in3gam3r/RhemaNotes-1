@@ -36,7 +36,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       client_reference_id: userId,
       customer_email: userEmail,
       metadata: {
-        userId: userId,
+        userId,
+        priceId,
       },
     });
 

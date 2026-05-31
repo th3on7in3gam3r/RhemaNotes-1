@@ -29,13 +29,28 @@ interface UserProfileProps {
   savedScriptures: SavedScripture[];
   onScripturesChange: () => void;
   onManageSubscription: () => void;
+  onRefreshPlan?: () => Promise<unknown>;
 }
 
 export const UserProfile: React.FC<UserProfileProps> = ({ 
-  onBack, tier, stats, savedScriptures, onScripturesChange, onManageSubscription 
+  onBack, tier, stats, savedScriptures, onScripturesChange, onManageSubscription, onRefreshPlan
 }) => {
   const { user } = useUser();
   const { signOut } = useClerk();
+  const [isRefreshingPlan, setIsRefreshingPlan] = React.useState(false);
+
+  const tierLabel =
+    tier === 'free' ? 'The Seed' : tier === 'pro' ? 'The Vine' : 'The Harvest';
+
+  const handleRefreshPlan = async () => {
+    if (!onRefreshPlan) return;
+    setIsRefreshingPlan(true);
+    try {
+      await onRefreshPlan();
+    } finally {
+      setIsRefreshingPlan(false);
+    }
+  };
 
   const handleRemoveScripture = (id: string) => {
     removeSavedScripture(id);
@@ -117,11 +132,12 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                     <div className="p-6 bg-indigo-50/50 rounded-[32px] border border-indigo-50/50 text-center">
                        <p className="text-[10px] font-black text-indigo-900/30 uppercase tracking-[0.3em] mb-2">Current Tier</p>
                        <span className={`text-2xl font-serif font-black italic ${tier === 'free' ? 'text-indigo-400' : 'text-amber-600'}`}>
-                         {tier === 'free' ? 'The Mustard Seed' : tier === 'pro' ? 'The Vine Member' : 'The Harvest Church'}
+                         {tierLabel}
                        </span>
                     </div>
 
                     {tier === 'free' && (
+                      <>
                       <button 
                         onClick={onManageSubscription}
                         className="group relative w-full overflow-hidden py-5 md:py-6 bg-indigo-950 text-amber-200 rounded-[24px] md:rounded-[32px] font-black text-xs uppercase tracking-[0.3em] shadow-xl hover:shadow-2xl hover:shadow-indigo-900/30 hover:-translate-y-1 active:scale-[0.98] transition-all"
@@ -129,9 +145,19 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                         <div className="absolute inset-0 bg-gradient-to-r from-amber-400/0 via-amber-400/10 to-amber-400/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
                         <span className="flex items-center justify-center">
                           <Zap className="w-4 h-4 mr-2" />
-                          Upgrade to Pro
+                          Upgrade Plan
                         </span>
                       </button>
+                      {onRefreshPlan && (
+                        <button
+                          onClick={handleRefreshPlan}
+                          disabled={isRefreshingPlan}
+                          className="w-full py-4 bg-amber-50 border border-amber-100 text-amber-900 rounded-[24px] font-black text-[10px] uppercase tracking-[0.2em] hover:bg-amber-100 transition-all disabled:opacity-60"
+                        >
+                          {isRefreshingPlan ? 'Checking Stripe…' : 'Already paid? Refresh plan'}
+                        </button>
+                      )}
+                      </>
                     )}
                     
                     <button 

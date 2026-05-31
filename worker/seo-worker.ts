@@ -29,6 +29,7 @@ import { getYouTubeTranscript } from '../services/youtubeService';
 import { GEMINI_PROXY_MAX_BODY_BYTES } from '../constants/ai';
 import { resolveAuth, enforceWriteUserId, isPaidTier } from './auth';
 import { checkRateLimit, clientRateLimitKey } from './rateLimit';
+import { syncUserTierFromStripe, tierFromPriceId, upsertUserTier } from './stripeTier';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -86,6 +87,10 @@ export default {
 
     if (path === '/api/user' && request.method === 'GET') {
       return handleUserAPI(request, env);
+    }
+
+    if (path === '/api/sync-subscription' && request.method === 'POST') {
+      return handleSyncSubscriptionAPI(request, env);
     }
 
     if (path === '/api/youtube-transcript' && request.method === 'GET') {
@@ -266,7 +271,7 @@ async function handleCheckoutAPI(request: Request, env: Env): Promise<Response> 
       cancel_url: `${origin}/pricing`,
       client_reference_id: userId,
       customer_email: userEmail,
-      metadata: { userId: userId },
+      metadata: { userId, priceId },
     });
 
     return new Response(JSON.stringify({ url: session.url }), {
@@ -303,34 +308,32 @@ async function handleWebhookAPI(request: Request, env: Env): Promise<Response> {
     return new Response(`Webhook signature invalid: ${err.message}`, { status: 400 });
   }
 
-  if (event.type === 'checkout.session.completed') {
+  if (event.type === 'checkout.session.completed' && env.DB && env.STRIPE_SECRET_KEY) {
     const session = event.data.object;
     const userId = session.client_reference_id || session.metadata?.userId;
     const customerEmail = session.customer_email || session.customer_details?.email;
-    const stripeCustomerId = session.customer;
-    const stripeSubscriptionId = session.subscription;
+    if (!userId) return new Response(JSON.stringify({ received: true }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
 
-    // Map price ID to tier
-    const lineItems = session.display_items || [];
-    const priceId = session.line_items?.data?.[0]?.price?.id || '';
-    let tier = 'pro'; // default to pro
-    if (priceId === 'price_1TSmOfDaUBBsjt5mjrJLVLLK') tier = 'church';
-    else if (priceId === 'price_1TSmM0DaUBBsjt5mlh09smbe') tier = 'free';
-
-    if (env.DB && userId) {
+    try {
+      const stripe = new Stripe(env.STRIPE_SECRET_KEY);
+      await syncUserTierFromStripe(stripe, env.DB, userId, customerEmail || '', session.id);
+    } catch (dbErr: any) {
+      console.error('Stripe tier sync error:', dbErr.message);
+      const priceId = session.metadata?.priceId || '';
+      const tier = tierFromPriceId(priceId);
       try {
-        // Upsert user with new tier
-        await env.DB.prepare(`
-          INSERT INTO users (id, email, tier, stripe_customer_id, stripe_subscription_id, updated_at)
-          VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-          ON CONFLICT(id) DO UPDATE SET
-            tier = excluded.tier,
-            stripe_customer_id = excluded.stripe_customer_id,
-            stripe_subscription_id = excluded.stripe_subscription_id,
-            updated_at = CURRENT_TIMESTAMP
-        `).bind(userId, customerEmail || '', tier, stripeCustomerId || '', stripeSubscriptionId || '').run();
-      } catch (dbErr: any) {
-        console.error('DB upsert error:', dbErr.message);
+        await upsertUserTier(
+          env.DB,
+          userId,
+          tier,
+          customerEmail || '',
+          typeof session.customer === 'string' ? session.customer : null,
+          typeof session.subscription === 'string' ? session.subscription : null,
+        );
+      } catch (fallbackErr: any) {
+        console.error('DB upsert fallback error:', fallbackErr.message);
       }
     }
   }
@@ -376,6 +379,36 @@ async function handleUserAPI(request: Request, env: Env): Promise<Response> {
   }
 
   return new Response(JSON.stringify({ tier: 'free' }), { headers: cors });
+}
+
+async function handleSyncSubscriptionAPI(request: Request, env: Env): Promise<Response> {
+  const cors = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' };
+  const auth = await resolveAuth(request, env);
+
+  if (!auth.authenticated) {
+    return new Response(JSON.stringify({ error: 'Sign in required' }), { status: 401, headers: cors });
+  }
+  if (!env.DB || !env.STRIPE_SECRET_KEY) {
+    return new Response(JSON.stringify({ error: 'Subscription sync unavailable' }), { status: 503, headers: cors });
+  }
+
+  let sessionId: string | undefined;
+  let email = '';
+  try {
+    const body = (await request.json()) as { sessionId?: string; email?: string };
+    sessionId = body.sessionId;
+    email = body.email || '';
+  } catch {
+    /* optional body */
+  }
+
+  try {
+    const stripe = new Stripe(env.STRIPE_SECRET_KEY);
+    const tier = await syncUserTierFromStripe(stripe, env.DB, auth.userId, email, sessionId);
+    return new Response(JSON.stringify({ tier, userId: auth.userId, synced: true }), { headers: cors });
+  } catch (err: any) {
+    return new Response(JSON.stringify({ error: err.message || 'Sync failed' }), { status: 500, headers: cors });
+  }
 }
 
 // ── Static Assets & Robots ───────────────────────────────────────────────────
