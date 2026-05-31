@@ -101,7 +101,7 @@ function App() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const { user, isLoaded: clerkLoaded } = useUser();
   const { getToken } = useAuth();
-  const { tier, isPro, isLoadingTier, getLimit, refreshTier } = useSubscription();
+  const { tier, isPro, isLoadingTier, getLimit, refreshTier, tierSyncError } = useSubscription();
 
   useEffect(() => {
     if (!clerkLoaded) return;
@@ -594,6 +594,7 @@ function App() {
           <UserProfile
             onBack={handleGoHome}
             tier={tier}
+            tierSyncError={tierSyncError}
             onManageSubscription={handleManageSubscription}
             onRefreshPlan={() => refreshTier({ forceStripeSync: true })}
             savedScriptures={savedScriptures}

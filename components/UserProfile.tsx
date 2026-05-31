@@ -23,6 +23,7 @@ import { removeSavedScripture } from '../services/storageService';
 interface UserProfileProps {
   onBack: () => void;
   tier: string;
+  tierSyncError?: string | null;
   stats: {
     totalScribes: number;
   };
@@ -33,7 +34,7 @@ interface UserProfileProps {
 }
 
 export const UserProfile: React.FC<UserProfileProps> = ({ 
-  onBack, tier, stats, savedScriptures, onScripturesChange, onManageSubscription, onRefreshPlan
+  onBack, tier, tierSyncError, stats, savedScriptures, onScripturesChange, onManageSubscription, onRefreshPlan
 }) => {
   const { user } = useUser();
   const { signOut } = useClerk();
@@ -124,8 +125,11 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                  <h2 className="text-3xl font-serif font-black text-indigo-950 mb-2">
                    {user.fullName}
                  </h2>
-                 <p className="text-indigo-900/30 text-xs font-black uppercase tracking-[0.2em] mb-10">
+                 <p className="text-indigo-900/30 text-xs font-black uppercase tracking-[0.2em] mb-4">
                    Member since {new Date(user.createdAt!).getFullYear()}
+                 </p>
+                 <p className="text-[9px] text-indigo-900/25 font-mono mb-10 break-all px-2" title="Clerk account ID">
+                   ID: {user.id}
                  </p>
 
                  <div className="w-full space-y-4">
@@ -134,6 +138,14 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                        <span className={`text-2xl font-serif font-black italic ${tier === 'free' ? 'text-indigo-400' : 'text-amber-600'}`}>
                          {tierLabel}
                        </span>
+                       {tier === 'free' && (
+                         <p className="text-[10px] text-indigo-900/40 mt-3 leading-relaxed">
+                           Cloudflare/GitHub admin does not change app tier. Plan comes from Stripe or founder access.
+                         </p>
+                       )}
+                       {tierSyncError && (
+                         <p className="text-[10px] text-rose-600 mt-3 leading-relaxed font-semibold">{tierSyncError}</p>
+                       )}
                     </div>
 
                     {tier === 'free' && (

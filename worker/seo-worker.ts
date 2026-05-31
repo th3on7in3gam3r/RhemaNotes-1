@@ -30,6 +30,7 @@ import { GEMINI_PROXY_MAX_BODY_BYTES } from '../constants/ai';
 import { resolveAuth, enforceWriteUserId, isPaidTier } from './auth';
 import { checkRateLimit, clientRateLimitKey } from './rateLimit';
 import { syncUserTierFromStripe, tierFromPriceId, upsertUserTier } from './stripeTier';
+import { isFounderAccount } from './founder';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -50,6 +51,10 @@ interface Env {
   STRIPE_WEBHOOK_SECRET: string;
   /** Clerk Secret Key */
   CLERK_SECRET_KEY: string;
+  /** Comma-separated Clerk user IDs granted Harvest (founder) tier — set in dashboard only */
+  FOUNDER_CLERK_IDS?: string;
+  /** Comma-separated founder emails granted Harvest tier — set in dashboard only */
+  FOUNDER_EMAILS?: string;
   /** Gemini API Key */
   GEMINI_API_KEY?: string;
 }
@@ -404,7 +409,13 @@ async function handleSyncSubscriptionAPI(request: Request, env: Env): Promise<Re
 
   try {
     const stripe = new Stripe(env.STRIPE_SECRET_KEY);
-    const tier = await syncUserTierFromStripe(stripe, env.DB, auth.userId, email, sessionId);
+    let tier = await syncUserTierFromStripe(stripe, env.DB, auth.userId, email, sessionId);
+
+    if (tier === 'free' && isFounderAccount(env, auth.userId, email || auth.email)) {
+      tier = 'church';
+      await upsertUserTier(env.DB, auth.userId, 'church', email || auth.email || '');
+    }
+
     return new Response(JSON.stringify({ tier, userId: auth.userId, synced: true }), { headers: cors });
   } catch (err: any) {
     return new Response(JSON.stringify({ error: err.message || 'Sync failed' }), { status: 500, headers: cors });

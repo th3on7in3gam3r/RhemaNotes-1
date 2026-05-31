@@ -29,6 +29,8 @@ npm run test:gemini
    - `CLERK_SECRET_KEY` — **Required** so signed-in users are verified; paid tier (`pro` / `church`) is read from D1 for everyone
    - `STRIPE_SECRET_KEY`
    - `STRIPE_WEBHOOK_SECRET`
+   - `FOUNDER_EMAILS` — optional comma-separated sign-in emails granted **The Harvest** (project owners; not in git)
+   - `FOUNDER_CLERK_IDS` — optional comma-separated Clerk `user_…` IDs (same effect; use Profile → ID line)
 
    **Build variables** (same dashboard → Build, or local `.env.local` for `npm run build`):
    - `VITE_CLERK_PUBLISHABLE_KEY` — must be present at **build time** (a Worker secret named `VITE_*` does not inject into the JS bundle)
