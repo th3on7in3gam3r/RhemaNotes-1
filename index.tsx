@@ -4,13 +4,13 @@ import App from './App';
 import './index.css';
 import { registerSW } from 'virtual:pwa-register';
 import { ClerkBootstrap } from './components/ClerkBootstrap';
-import { isClerkConfigured } from './services/runtimeConfig';
 
 const updateSW = registerSW({
+  onRegistered(registration) {
+    registration?.update();
+  },
   onNeedRefresh() {
-    if (confirm('New content available. Reload?')) {
-      updateSW(true);
-    }
+    updateSW(true);
   },
   onOfflineReady() {
     console.log('App is ready to work offline');
@@ -23,12 +23,6 @@ if (!rootElement) {
 }
 
 const root = ReactDOM.createRoot(rootElement);
-
-if (!isClerkConfigured()) {
-  console.error(
-    'Clerk publishable key missing. Set VITE_CLERK_PUBLISHABLE_KEY for local builds or CLERK_PUBLISHABLE_KEY on the Cloudflare Worker.',
-  );
-}
 
 root.render(
   <React.StrictMode>

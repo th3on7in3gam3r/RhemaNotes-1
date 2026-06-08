@@ -6,22 +6,28 @@ interface ClerkBootstrapProps {
   children: React.ReactNode;
 }
 
-/** Loads Clerk publishable key from Worker before rendering auth UI. */
+/** Loads Clerk publishable key from Worker-injected HTML or /api/public-config. */
 export const ClerkBootstrap: React.FC<ClerkBootstrapProps> = ({ children }) => {
-  const [ready, setReady] = useState(Boolean(getClerkPublishableKey()));
+  const [publishableKey, setPublishableKey] = useState<string | undefined>();
 
   useEffect(() => {
-    if (ready) return;
     let cancelled = false;
-    hydrateRuntimeConfig().finally(() => {
-      if (!cancelled) setReady(true);
-    });
+
+    (async () => {
+      let key = getClerkPublishableKey();
+      if (!key) {
+        await hydrateRuntimeConfig();
+        key = getClerkPublishableKey();
+      }
+      if (!cancelled) setPublishableKey(key);
+    })();
+
     return () => {
       cancelled = true;
     };
-  }, [ready]);
+  }, []);
 
-  if (!ready) {
+  if (publishableKey === undefined) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-indigo-50/30">
         <p className="text-sm font-bold text-indigo-400 animate-pulse">Loading…</p>
@@ -30,7 +36,7 @@ export const ClerkBootstrap: React.FC<ClerkBootstrapProps> = ({ children }) => {
   }
 
   return (
-    <ClerkProvider publishableKey={getClerkPublishableKey() || ''}>
+    <ClerkProvider publishableKey={publishableKey}>
       {children}
     </ClerkProvider>
   );

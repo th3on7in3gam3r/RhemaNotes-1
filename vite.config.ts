@@ -46,7 +46,7 @@ export default defineConfig(({ mode }) => {
                 // Cache static assets (JS, CSS, images) with StaleWhileRevalidate
                 urlPattern: /\.(?:js|css|png|jpg|jpeg|svg|ico|woff2?)$/,
                 handler: 'StaleWhileRevalidate',
-                options: { cacheName: 'static-assets' },
+                options: { cacheName: 'static-assets-v2' },
               },
             ],
           },
