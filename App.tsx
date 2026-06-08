@@ -18,6 +18,9 @@ import { useSermonProcessing } from './hooks/useSermonProcessing';
 import { ProcessingOverlay } from './components/ProcessingOverlay';
 import { TranscriptReviewModal } from './components/TranscriptReviewModal';
 import { UploadSermon } from './components/UploadSermon';
+import { SermonPathPicker } from './components/SermonPathPicker';
+import { LongSermonGuide } from './components/LongSermonGuide';
+import { isWhisperAvailable } from './services/whisperTranscriptionService';
 import { YouTubeProcessor } from './components/YouTubeProcessor';
 import { PendingSyncBanner } from './components/PendingSyncBanner';
 import { PendingPartialTranscriptBanner } from './components/PendingPartialTranscriptBanner';
@@ -96,6 +99,8 @@ function App() {
   const [savedScriptures, setSavedScriptures] = useState<SavedScripture[]>(() => getSavedScriptures());
   const [initialUploadMode, setInitialUploadMode] = useState<'text' | 'file' | 'transcribe'>('text');
   const [uploadDraftText, setUploadDraftText] = useState('');
+  const [showLongSermonGuide, setShowLongSermonGuide] = useState(false);
+  const [whisperAvailable, setWhisperAvailable] = useState(false);
   
   const [checkoutSessionId, setCheckoutSessionId] = useState<string | null>(null);
   
@@ -115,6 +120,20 @@ function App() {
       }
     });
   }, [getToken, clerkLoaded, user?.id]);
+
+  useEffect(() => {
+    if (!clerkLoaded) return;
+    isWhisperAvailable().then(setWhisperAvailable).catch(() => setWhisperAvailable(false));
+  }, [clerkLoaded, user?.id]);
+
+  const openPasteTranscript = useCallback(() => {
+    setInitialUploadMode('text');
+    setCurrentScreen('upload');
+  }, []);
+
+  const openRecordInApp = useCallback(() => {
+    setCurrentScreen('listening');
+  }, []);
 
   const onSermonSaved = useCallback((item: SermonHistoryItem, summary: SermonSummaryOutput) => {
     setHistory((prev) => [item, ...prev]);
@@ -339,13 +358,13 @@ function App() {
               </h1>
               
               <p className="text-xl text-indigo-900/60 leading-relaxed font-serif max-w-xl mx-auto italic">
-                Record a sermon like a voice memo, upload audio, or paste a transcript — RhemaNotes transcribes the Word and turns it into scripture links, study tools, and reflections.
+                Paste a transcript from Voice Memos, record in the app, or upload audio — RhemaNotes turns the Word into scripture links, study tools, and reflections.
               </p>
 
               <div className="flex items-center justify-center gap-4 pt-4">
-                 <button onClick={() => setCurrentScreen('listening')} className="btn-sacred-primary px-8 py-4 text-lg">
-                    <Mic className="w-5 h-5" />
-                    Record Live
+                 <button onClick={openPasteTranscript} className="btn-sacred-primary px-8 py-4 text-lg">
+                    <FileText className="w-5 h-5" />
+                    Paste Transcript
                  </button>
                  <button onClick={handleLoadDemo} className="btn-sacred-gold px-8 py-4 text-lg">
                     Explore Demo
@@ -366,15 +385,24 @@ function App() {
               Or use Live Recording / Transcribe Audio, review &amp; edit the text, then build your study guide.
             </div>
 
-            {/* Input method grid */}
-            <div className="w-full">
-               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 w-full">
+            <div className="w-full max-w-5xl mx-auto px-2">
+              <SermonPathPicker
+                whisperAvailable={whisperAvailable}
+                onPasteTranscript={openPasteTranscript}
+                onRecordInApp={openRecordInApp}
+                onLongSermonGuide={() => setShowLongSermonGuide(true)}
+              />
+            </div>
+
+            {/* Other input methods */}
+            <div className="w-full max-w-3xl mx-auto">
+               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full">
                   <InputCard
-                    icon={Mic}
-                    accent="rose"
-                    title="Live Recording"
-                    description="Record the sermon like a voice memo. We transcribe it, then build your study guide."
-                    onClick={() => setCurrentScreen('listening')}
+                    icon={FileAudio}
+                    accent="indigo"
+                    title="Transcribe Audio File"
+                    description="Upload a recording from Voice Memos or your computer — Whisper transcribes, then you edit before the study guide."
+                    onClick={() => { setInitialUploadMode('transcribe'); setCurrentScreen('upload'); }}
                   />
                   <InputCard
                     icon={Youtube}
@@ -384,21 +412,7 @@ function App() {
                     onClick={() => isPro ? setCurrentScreen('youtube') : setCurrentScreen('pricing')}
                     badge={!isPro ? "PRO" : undefined}
                   />
-                  <InputCard
-                    icon={FileAudio}
-                    accent="indigo"
-                    title="Transcribe Audio"
-                    description="Upload a recording — get editable text first, then your study guide."
-                    onClick={() => { setInitialUploadMode('transcribe'); setCurrentScreen('upload'); }}
-                  />
-                  <InputCard
-                    icon={FileText}
-                    accent="indigo"
-                    title="Paste Text"
-                    description="Already have a transcript? Best for hour-long sermons."
-                    onClick={() => { setInitialUploadMode('text'); setCurrentScreen('upload'); }}
-                  />
-                </div>
+               </div>
             </div>
 
             {/* Recent library section */}
@@ -683,6 +697,12 @@ function App() {
       </AnimatePresence>
       {/* Onboarding Journey */}
       {showOnboarding && <Onboarding onComplete={handleOnboardingComplete} />}
+      {showLongSermonGuide && (
+        <LongSermonGuide
+          onClose={() => setShowLongSermonGuide(false)}
+          onPasteTranscript={openPasteTranscript}
+        />
+      )}
     </Layout>
   );
 };

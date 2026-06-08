@@ -31,6 +31,7 @@ import { resolveAuth, enforceWriteUserId, isPaidTier } from './auth';
 import { checkRateLimit, clientRateLimitKey } from './rateLimit';
 import { syncUserTierFromStripe, tierFromPriceId, upsertUserTier } from './stripeTier';
 import { isFounderAccount } from './founder';
+import { submitWhisperTranscription, fetchWhisperTaskStatus } from './whisperTranscribe';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -57,6 +58,8 @@ interface Env {
   FOUNDER_EMAILS?: string;
   /** Gemini API Key */
   GEMINI_API_KEY?: string;
+  /** Whisper API (whisper-api.com) for long audio transcription */
+  WHISPER_API_KEY?: string;
 }
 
 interface SermonKVEntry {
@@ -96,6 +99,19 @@ export default {
 
     if (path === '/api/sync-subscription' && request.method === 'POST') {
       return handleSyncSubscriptionAPI(request, env);
+    }
+
+    if (path === '/api/transcribe/available' && request.method === 'GET') {
+      return handleTranscribeAvailableAPI(env);
+    }
+
+    if (path === '/api/transcribe' && request.method === 'POST') {
+      return handleTranscribeSubmitAPI(request, env);
+    }
+
+    const transcribeStatusMatch = path.match(/^\/api\/transcribe\/status\/([^/]+)$/);
+    if (transcribeStatusMatch && request.method === 'GET') {
+      return handleTranscribeStatusAPI(transcribeStatusMatch[1], request, env);
     }
 
     if (path === '/api/youtube-transcript' && request.method === 'GET') {
@@ -419,6 +435,89 @@ async function handleSyncSubscriptionAPI(request: Request, env: Env): Promise<Re
     return new Response(JSON.stringify({ tier, userId: auth.userId, synced: true }), { headers: cors });
   } catch (err: any) {
     return new Response(JSON.stringify({ error: err.message || 'Sync failed' }), { status: 500, headers: cors });
+  }
+}
+
+const WHISPER_MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
+const whisperCors = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' };
+
+async function handleTranscribeAvailableAPI(env: Env): Promise<Response> {
+  return new Response(JSON.stringify({ available: Boolean(env.WHISPER_API_KEY) }), { headers: whisperCors });
+}
+
+async function handleTranscribeSubmitAPI(request: Request, env: Env): Promise<Response> {
+  if (!env.WHISPER_API_KEY) {
+    return new Response(JSON.stringify({ error: 'Whisper not configured' }), { status: 503, headers: whisperCors });
+  }
+
+  const auth = await resolveAuth(request, env);
+  if (!auth.authenticated) {
+    return new Response(JSON.stringify({ error: 'Sign in required for transcription' }), { status: 401, headers: whisperCors });
+  }
+
+  const rateKey = `whisper:${auth.userId}`;
+  if (!isPaidTier(auth.tier)) {
+    const limit = checkRateLimit(rateKey, 5, 3_600_000);
+    if (!limit.allowed) {
+      return new Response(
+        JSON.stringify({
+          error: 'Transcription limit reached. Upgrade for more, or paste a transcript from Voice Memos.',
+          retryAfterSec: limit.retryAfterSec,
+        }),
+        { status: 429, headers: { ...whisperCors, 'Retry-After': String(limit.retryAfterSec ?? 3600) } },
+      );
+    }
+  }
+
+  const contentType = request.headers.get('Content-Type') || '';
+  if (!contentType.includes('multipart/form-data')) {
+    return new Response(JSON.stringify({ error: 'Expected multipart file upload' }), { status: 400, headers: whisperCors });
+  }
+
+  const formData = await request.formData();
+  const fileEntry = formData.get('file');
+  if (!fileEntry || typeof fileEntry === 'string') {
+    return new Response(JSON.stringify({ error: 'Missing audio file' }), { status: 400, headers: whisperCors });
+  }
+  const fileBlob = fileEntry as Blob;
+  const fileName = (fileEntry as File).name || 'sermon.webm';
+  if (fileBlob.size > WHISPER_MAX_UPLOAD_BYTES) {
+    return new Response(JSON.stringify({ error: 'File too large (max 100 MB)' }), { status: 413, headers: whisperCors });
+  }
+
+  try {
+    const result = await submitWhisperTranscription(env.WHISPER_API_KEY, fileBlob, fileName);
+    return new Response(JSON.stringify({ taskId: result.task_id, status: result.status }), { headers: whisperCors });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Whisper upload failed';
+    return new Response(JSON.stringify({ error: message }), { status: 502, headers: whisperCors });
+  }
+}
+
+async function handleTranscribeStatusAPI(taskId: string, request: Request, env: Env): Promise<Response> {
+  if (!env.WHISPER_API_KEY) {
+    return new Response(JSON.stringify({ error: 'Whisper not configured' }), { status: 503, headers: whisperCors });
+  }
+
+  const auth = await resolveAuth(request, env);
+  if (!auth.authenticated) {
+    return new Response(JSON.stringify({ error: 'Sign in required' }), { status: 401, headers: whisperCors });
+  }
+
+  try {
+    const data = await fetchWhisperTaskStatus(env.WHISPER_API_KEY, taskId);
+    const normalizedStatus = (data.status || '').toLowerCase();
+    return new Response(
+      JSON.stringify({
+        status: normalizedStatus === 'done' || normalizedStatus === 'success' ? 'completed' : normalizedStatus,
+        transcript: data.result,
+        error: data.error,
+      }),
+      { headers: whisperCors },
+    );
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Whisper status check failed';
+    return new Response(JSON.stringify({ error: message }), { status: 502, headers: whisperCors });
   }
 }
 

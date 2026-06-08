@@ -9,6 +9,7 @@ import {
   TRANSCRIPTION_MAX_OUTPUT_TOKENS,
 } from '../constants/ai';
 import { savePartialTranscript, clearPartialTranscript } from './transcriptCache';
+import { transcribeWithWhisper, WhisperUnavailableError } from './whisperTranscriptionService';
 import { SermonSummaryOutput } from '../types';
 import { authFetch } from './apiAuth';
 
@@ -211,6 +212,27 @@ export function estimateChunksFromFile(file: File): number {
 }
 
 export async function transcribeSermonAudio(
+  file: File,
+  onProgress?: GeminiProgressCallback,
+  signal?: AbortSignal,
+): Promise<string> {
+  assertNotAborted(signal);
+
+  try {
+    onProgress?.('Sending audio to Whisper for transcription…');
+    const whisperText = await transcribeWithWhisper(file, onProgress, signal);
+    await clearPartialTranscript();
+    return whisperText;
+  } catch (err) {
+    if (err instanceof WhisperUnavailableError) {
+      onProgress?.('Whisper not configured — using built-in transcription (keep tab open on Wi‑Fi)…');
+      return transcribeSermonAudioWithGemini(file, onProgress, signal);
+    }
+    throw err;
+  }
+}
+
+async function transcribeSermonAudioWithGemini(
   file: File,
   onProgress?: GeminiProgressCallback,
   signal?: AbortSignal,

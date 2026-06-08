@@ -25,6 +25,7 @@ dist-ssr
 
 # Environment Variables
 .env*
+.dev.vars
 
 # Dev-only (not shipped)
 migrated_prompt_history/

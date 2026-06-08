@@ -345,8 +345,8 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({ onStopRecording, o
               )}
               {isRecording && recordingDuration >= LONG_RECORDING_WARN_SECONDS && (
                 <p className="mt-4 text-sm font-bold text-amber-800 bg-amber-50 px-4 py-3 rounded-xl border border-amber-200 max-w-md mx-auto leading-relaxed">
-                  Long sermon: transcription can take 15–20 min and may fail on some phones.
-                  Consider Voice Memos → Upload → <strong>Paste Text</strong>, or finish here — your audio will download as a backup.
+                  Long sermon: after you finish, Whisper transcribes when available (15–20 min).
+                  For 45+ min, Voice Memos → <strong>Paste Text</strong> is most reliable — or finish here; your audio downloads as a backup.
                 </p>
               )}
 

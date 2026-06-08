@@ -31,6 +31,7 @@ npm run test:gemini
    - `STRIPE_WEBHOOK_SECRET`
    - `FOUNDER_EMAILS` — optional comma-separated sign-in emails granted **The Harvest** (project owners; not in git)
    - `FOUNDER_CLERK_IDS` — optional comma-separated Clerk `user_…` IDs (same effect; use Profile → ID line)
+   - `WHISPER_API_KEY` — [whisper-api.com](https://whisper-api.com) for long audio transcription (sign-in required; falls back to Gemini chunks if unset)
 
    **Build variables** (same dashboard → Build, or local `.env.local` for `npm run build`):
    - `VITE_CLERK_PUBLISHABLE_KEY` — must be present at **build time** (a Worker secret named `VITE_*` does not inject into the JS bundle)
@@ -46,10 +47,18 @@ npm run test:gemini
    - Short live recording → Complete Scribing → review transcript → study guide
    - History syncs when signed in
 
+## Long sermons (two paths)
+
+**Path A — recommended (45+ min):** Record in **Voice Memos** (iPhone) or Google Recorder (Android) → copy transcript → **Paste Text** in RhemaNotes.
+
+**Path B — in-app:** **Record in RhemaNotes** or **Transcribe Audio File**. When `WHISPER_API_KEY` is set on the Worker, audio is sent to Whisper first; you review & edit text, then build the study guide. Very long in-browser recordings may still fail on some phones — use Path A if that happens.
+
+Local Worker dev: copy `.dev.vars.example` → `.dev.vars` and set `WHISPER_API_KEY`.
+
 ## Live recording flow
 
-1. **Record** — voice memo style
-2. **Complete Scribing** — audio is transcribed to plain text (chunked for long sermons)
+1. **Record** — voice memo style (Whisper transcription when configured)
+2. **Complete Scribing** — audio → editable transcript
 3. **Review transcript** — confirm before study guide
 4. **Study guide** — scriptures, quiz, flashcards, mind map from text
 
@@ -59,7 +68,9 @@ npm run test:gemini
 |------|---------|
 | `App.tsx` | Routing & screens |
 | `hooks/useSermonProcessing.ts` | Transcribe → review → study guide pipeline |
-| `services/geminiService.ts` | Gemini API (proxy, retry, chunking) |
+| `services/geminiService.ts` | Gemini API (proxy, retry, chunking); Whisper-first transcribe |
+| `services/whisperTranscriptionService.ts` | Client upload + poll via Worker |
+| `worker/whisperTranscribe.ts` | Whisper API submit + status |
 | `worker/seo-worker.ts` | Cloudflare worker: assets, API, Gemini proxy |
 | `worker/auth.ts` | Clerk JWT verification |
 | `constants/ai.ts` | Model name & limits |

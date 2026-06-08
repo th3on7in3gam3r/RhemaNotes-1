@@ -23,3 +23,11 @@ export const GEMINI_PROXY_MAX_BODY_BYTES = 25 * 1024 * 1024;
 
 /** Per-chunk transcription output cap */
 export const TRANSCRIPTION_MAX_OUTPUT_TOKENS = 8192;
+
+/** Whisper API polling (client ↔ worker) */
+export const WHISPER_POLL_INTERVAL_MS = 4000;
+/** Max wait for Whisper to finish (45 min) */
+export const WHISPER_MAX_WAIT_MS = 45 * 60 * 1000;
+
+/** Suggest Voice Memos path at this duration (seconds) */
+export const LONG_SERMON_PASTE_RECOMMEND_SEC = 45 * 60;
