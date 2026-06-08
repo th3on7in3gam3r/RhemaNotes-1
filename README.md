@@ -27,6 +27,7 @@ npm run test:gemini
 2. **Secrets** (Cloudflare dashboard → Workers → Settings → Variables):
    - `GEMINI_API_KEY` — Google AI (all users share this quota)
    - `CLERK_SECRET_KEY` — **Required** so signed-in users are verified; paid tier (`pro` / `church`) is read from D1 for everyone
+   - `CLERK_PUBLISHABLE_KEY` — Clerk `pk_live_…` / `pk_test_…` (injected into HTML at runtime so sign-in works even when the Vite build omits it)
    - `STRIPE_SECRET_KEY`
    - `STRIPE_WEBHOOK_SECRET`
    - `FOUNDER_EMAILS` — optional comma-separated sign-in emails granted **The Harvest** (project owners; not in git)
@@ -34,7 +35,7 @@ npm run test:gemini
    - `WHISPER_API_KEY` — [whisper-api.com](https://whisper-api.com) for long audio transcription (sign-in required; falls back to Gemini chunks if unset)
 
    **Build variables** (same dashboard → Build, or local `.env.local` for `npm run build`):
-   - `VITE_CLERK_PUBLISHABLE_KEY` — must be present at **build time** (a Worker secret named `VITE_*` does not inject into the JS bundle)
+   - `VITE_CLERK_PUBLISHABLE_KEY` — optional at build time; if missing, set `CLERK_PUBLISHABLE_KEY` on the Worker instead
 3. **Deploy:** `npx wrangler deploy`
 4. **D1:** If the database predates Live Recording, apply migration 001:
    ```bash

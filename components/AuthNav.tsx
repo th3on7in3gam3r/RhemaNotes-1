@@ -1,9 +1,7 @@
 import React from 'react';
 import { User } from 'lucide-react';
 import { SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/react';
-
-export const CLERK_PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string | undefined;
-export const isClerkConfigured = Boolean(CLERK_PUBLISHABLE_KEY?.startsWith('pk_'));
+import { isClerkConfigured } from '../services/runtimeConfig';
 
 interface AuthNavProps {
   variant: 'desktop' | 'mobile';
@@ -29,8 +27,8 @@ function AuthUnavailable({ variant }: { variant: 'desktop' | 'mobile' }) {
     );
   }
   return (
-    <span className="px-3 py-2 text-xs font-bold text-rose-600 max-w-[140px] leading-snug text-center">
-      Sign-in unavailable — rebuild with VITE_CLERK_PUBLISHABLE_KEY
+    <span className="px-3 py-2 text-xs font-bold text-rose-600 max-w-[160px] leading-snug text-center">
+      Sign-in unavailable — set CLERK_PUBLISHABLE_KEY on the Worker
     </span>
   );
 }
@@ -38,7 +36,7 @@ function AuthUnavailable({ variant }: { variant: 'desktop' | 'mobile' }) {
 export const AuthNav: React.FC<AuthNavProps> = ({ variant, onNavigate, currentScreen }) => {
   const { isLoaded, isSignedIn } = useAuth();
 
-  if (!isClerkConfigured) {
+  if (!isClerkConfigured()) {
     return <AuthUnavailable variant={variant} />;
   }
 

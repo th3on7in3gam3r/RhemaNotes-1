@@ -52,6 +52,8 @@ interface Env {
   STRIPE_WEBHOOK_SECRET: string;
   /** Clerk Secret Key */
   CLERK_SECRET_KEY: string;
+  /** Clerk publishable key — injected into HTML at runtime (safe to expose) */
+  CLERK_PUBLISHABLE_KEY?: string;
   /** Comma-separated Clerk user IDs granted Harvest (founder) tier — set in dashboard only */
   FOUNDER_CLERK_IDS?: string;
   /** Comma-separated founder emails granted Harvest tier — set in dashboard only */
@@ -105,6 +107,10 @@ export default {
       return handleTranscribeAvailableAPI(env);
     }
 
+    if (path === '/api/public-config' && request.method === 'GET') {
+      return handlePublicConfigAPI(env);
+    }
+
     if (path === '/api/transcribe' && request.method === 'POST') {
       return handleTranscribeSubmitAPI(request, env);
     }
@@ -132,7 +138,9 @@ export default {
 
     try {
       const asset = await env.ASSETS.fetch(request.clone() as any);
-      if (asset.ok || isAssetRequest(path)) {
+      // Only short-circuit real static files — not "/" (which also resolves to index.html
+      // but must pass through HTMLRewriter for Clerk runtime config + SEO injection).
+      if (asset.ok && isAssetRequest(path)) {
         return asset;
       }
     } catch (e) {
@@ -145,6 +153,7 @@ export default {
     if (!assetResponse.ok) return assetResponse;
 
     const metaHTML = await resolveMetaHTML(path, env);
+    const runtimeHTML = buildRuntimeConfigHTML(env);
 
     return new HTMLRewriter()
       .on('title', { element: (el) => { el.remove(); } })
@@ -157,7 +166,7 @@ export default {
           }
         }
       })
-      .on('head', new MetaInjector(metaHTML))
+      .on('head', new MetaInjector(runtimeHTML + metaHTML))
       .transform(assetResponse);
   },
 };
@@ -445,6 +454,16 @@ async function handleTranscribeAvailableAPI(env: Env): Promise<Response> {
   return new Response(JSON.stringify({ available: Boolean(env.WHISPER_API_KEY) }), { headers: whisperCors });
 }
 
+async function handlePublicConfigAPI(env: Env): Promise<Response> {
+  const key = env.CLERK_PUBLISHABLE_KEY;
+  return new Response(
+    JSON.stringify({
+      clerkPublishableKey: key?.startsWith('pk_') ? key : null,
+    }),
+    { headers: whisperCors },
+  );
+}
+
 async function handleTranscribeSubmitAPI(request: Request, env: Env): Promise<Response> {
   if (!env.WHISPER_API_KEY) {
     return new Response(JSON.stringify({ error: 'Whisper not configured' }), { status: 503, headers: whisperCors });
@@ -616,6 +635,13 @@ async function fetchSermonFromKV(
 }
 
 // ── HTMLRewriter handler ──────────────────────────────────────────────────────
+
+function buildRuntimeConfigHTML(env: Env): string {
+  const key = env.CLERK_PUBLISHABLE_KEY;
+  if (!key?.startsWith('pk_')) return '';
+  const escaped = key.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  return `<script>window.__RHEMA_RUNTIME__=Object.assign(window.__RHEMA_RUNTIME__||{},{"clerkPublishableKey":"${escaped}"});</script>`;
+}
 
 class MetaInjector {
   private html: string;
