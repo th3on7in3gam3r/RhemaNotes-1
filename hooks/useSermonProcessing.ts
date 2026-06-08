@@ -10,6 +10,7 @@ import {
 } from '../services/geminiService';
 import { saveSermonToHistory } from '../services/storageService';
 import { savePendingTranscript, clearPendingTranscript } from '../services/transcriptCache';
+import { saveLastRecording } from '../services/recordingStore';
 import { ensureAuthToken } from '../services/apiAuth';
 import type { UserTier } from '../constants/features';
 import type { SermonSourceType } from '../types/source';
@@ -160,8 +161,14 @@ export function useSermonProcessing({
     [includeReflection, saveResult, handleError],
   );
 
-  /** Audio file / live recording — transcribe, then review */
-  const processAudioFile = useCallback(
+  const openTranscriptReview = useCallback(
+    (transcript: string, sourceType: SermonSourceType, file?: File, liveNotes?: UserNote[]) => {
+      setPendingReview({ transcript, file, liveNotes, sourceType });
+    },
+    [],
+  );
+
+  const runTranscription = useCallback(
     async (file: File, sourceType: SermonSourceType, liveNotes?: UserNote[]) => {
       const estMin = estimateRecordingMinutes(file);
       if (Number.isFinite(maxAudioMinutes) && maxAudioMinutes < Infinity && estMin > maxAudioMinutes) {
@@ -185,6 +192,17 @@ export function useSermonProcessing({
         }
       }
 
+      try {
+        await saveLastRecording({
+          blob: file,
+          fileName: file.name,
+          savedAt: Date.now(),
+          durationEstimateSec: Math.round(estMin * 60),
+        });
+      } catch {
+        /* non-fatal */
+      }
+
       const controller = beginProcessing();
       setIsLoading(true);
       setError(null);
@@ -194,8 +212,8 @@ export function useSermonProcessing({
         const tierLabel = tier === 'church' ? 'Harvest Church' : tier === 'pro' ? 'Vine' : '';
         const durationHint =
           chunks > 1
-            ? `Step 1 of 2: Transcribing ${chunks} parts (~${estimateTranscriptionMinutes(chunks)} min)${tierLabel ? ` · ${tierLabel}` : ''}. Keep this tab open on Wi‑Fi.`
-            : 'Step 1 of 2: Turning your recording into text…';
+            ? `Transcribing ${chunks} parts (~${estimateTranscriptionMinutes(chunks)} min)${tierLabel ? ` · ${tierLabel}` : ''}. Keep screen on & Wi‑Fi.`
+            : 'Turning your recording into text…';
         setProcessingStatus(durationHint);
         const transcript = await transcribeSermonAudio(
           file,
@@ -213,6 +231,22 @@ export function useSermonProcessing({
       }
     },
     [handleError, maxAudioMinutes, tier, isSignedIn],
+  );
+
+  /** Audio file / live recording — transcribe, then review */
+  const processAudioFile = useCallback(
+    async (file: File, sourceType: SermonSourceType, liveNotes?: UserNote[]) => {
+      await runTranscription(file, sourceType, liveNotes);
+    },
+    [runTranscription],
+  );
+
+  /** Transcribe only (no study guide) — same as live/upload audio first step */
+  const transcribeOnlyFile = useCallback(
+    async (file: File) => {
+      await runTranscription(file, 'upload');
+    },
+    [runTranscription],
   );
 
   /** Upload path: optional single-shot without review */
@@ -240,12 +274,33 @@ export function useSermonProcessing({
     [includeReflection, saveResult, handleError],
   );
 
-  const confirmTranscriptReview = useCallback(async () => {
-    if (!pendingReview) return;
-    const { transcript, file, liveNotes, sourceType } = pendingReview;
-    setPendingReview(null);
-    await runStudyGuide(transcript, sourceType, liveNotes, file);
-  }, [pendingReview, runStudyGuide]);
+  const confirmTranscriptReview = useCallback(
+    async (editedTranscript: string) => {
+      if (!pendingReview) return;
+      const { file, liveNotes, sourceType } = pendingReview;
+      const transcript = editedTranscript.trim();
+      if (!transcript) {
+        setError('Transcript is empty. Add text or start over.');
+        return;
+      }
+      setPendingReview(null);
+      await runStudyGuide(transcript, sourceType, liveNotes, file);
+    },
+    [pendingReview, runStudyGuide, setError],
+  );
+
+  const saveTranscriptForLater = useCallback(
+    async (editedTranscript: string) => {
+      await savePendingTranscript({
+        transcript: editedTranscript.trim(),
+        fileName: pendingReview?.file?.name || 'sermon-transcript.txt',
+        savedAt: Date.now(),
+      });
+      setPendingReview(null);
+      setError(null);
+    },
+    [pendingReview, setError],
+  );
 
   const dismissTranscriptReview = useCallback(() => {
     setPendingReview(null);
@@ -269,7 +324,10 @@ export function useSermonProcessing({
     processText,
     processAudioFile,
     processFileDirect,
+    transcribeOnlyFile,
+    openTranscriptReview,
     confirmTranscriptReview,
+    saveTranscriptForLater,
     dismissTranscriptReview,
     cancelActiveProcessing,
   };

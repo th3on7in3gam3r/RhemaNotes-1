@@ -377,10 +377,32 @@ function formatGeminiError(error: unknown, prefix: string): Error {
   }
   if (msg.includes('decodeAudioData') || msg.includes('Web Audio')) {
     return new Error(
-      'Could not read this recording in the browser. Try Chrome or Safari, or record a slightly shorter clip.',
+      'Could not read this long recording in the browser. Download your audio (Voice Memos works well), then use Upload → Paste Transcript — or record in two shorter parts.',
+    );
+  }
+  if (msg.includes('Unterminated') || msg.includes('JSON')) {
+    return new Error(
+      'AI response was cut off (common with very long sermons). Your transcript may still be saved — use Review partial, or paste transcript under Upload → Paste Text.',
     );
   }
   return new Error(`${prefix}: ${msg}`);
+}
+
+function parseGeminiJson(jsonString: string): SermonSummaryOutput {
+  try {
+    return JSON.parse(jsonString) as SermonSummaryOutput;
+  } catch (firstErr) {
+    const trimmed = jsonString.trim();
+    const lastBrace = trimmed.lastIndexOf('}');
+    if (lastBrace > 0) {
+      try {
+        return JSON.parse(trimmed.slice(0, lastBrace + 1)) as SermonSummaryOutput;
+      } catch {
+        /* fall through */
+      }
+    }
+    throw firstErr;
+  }
 }
 
 // ── Audio chunking ────────────────────────────────────────────────────────────
@@ -453,7 +475,18 @@ async function decodeAudioFile(file: File): Promise<AudioBuffer> {
   const ctx = new AudioContextClass();
   try {
     const buffer = await file.arrayBuffer();
+    if (buffer.byteLength > 80 * 1024 * 1024) {
+      throw new Error('Recording file too large for in-browser processing');
+    }
     return await ctx.decodeAudioData(buffer.slice(0));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('too large') || msg.includes('decode')) {
+      throw new Error(
+        'This recording is too long to process in one pass on this device. Download the audio, transcribe externally, or use Upload → Paste Text.',
+      );
+    }
+    throw err;
   } finally {
     if (ctx.state !== 'closed') await ctx.close().catch(() => {});
   }
@@ -490,7 +523,7 @@ async function callGemini(
     const jsonString = response.text;
     if (!jsonString) throw new Error("No response or empty response from Gemini API.");
 
-    const parsedData: SermonSummaryOutput = JSON.parse(jsonString);
+    const parsedData = parseGeminiJson(jsonString);
     parsedData.actionable_insights = parsedData.actionable_insights || [];
     parsedData.user_notes = parsedData.user_notes || [];
     parsedData.personal_action_items = parsedData.personal_action_items || [];

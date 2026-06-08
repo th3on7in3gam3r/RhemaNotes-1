@@ -20,6 +20,7 @@ import { TranscriptReviewModal } from './components/TranscriptReviewModal';
 import { UploadSermon } from './components/UploadSermon';
 import { YouTubeProcessor } from './components/YouTubeProcessor';
 import { PendingSyncBanner } from './components/PendingSyncBanner';
+import { PendingPartialTranscriptBanner } from './components/PendingPartialTranscriptBanner';
 import { setPageMeta, HOME_META, HISTORY_META } from './services/seoService';
 import { SermonSummaryOutput, SermonHistoryItem, UserNote, SavedScripture } from './types';
 import { DEMO_SERMON } from './demoSermon';
@@ -93,7 +94,8 @@ function App() {
   const [includeReflection, setIncludeReflection] = useState(false);
   const [history, setHistory] = useState<SermonHistoryItem[]>([]);
   const [savedScriptures, setSavedScriptures] = useState<SavedScripture[]>(() => getSavedScriptures());
-  const [initialUploadMode, setInitialUploadMode] = useState<'text' | 'file'>('text');
+  const [initialUploadMode, setInitialUploadMode] = useState<'text' | 'file' | 'transcribe'>('text');
+  const [uploadDraftText, setUploadDraftText] = useState('');
   
   const [checkoutSessionId, setCheckoutSessionId] = useState<string | null>(null);
   
@@ -129,7 +131,11 @@ function App() {
     pendingReview,
     processText,
     processAudioFile,
+    processFileDirect,
+    transcribeOnlyFile,
+    openTranscriptReview,
     confirmTranscriptReview,
+    saveTranscriptForLater,
     dismissTranscriptReview,
     cancelActiveProcessing,
   } = useSermonProcessing({
@@ -206,9 +212,9 @@ function App() {
 
   const handleProcessFile = useCallback(
     async (file: File) => {
-      await processAudioFile(file, 'upload');
+      await processFileDirect(file, 'upload');
     },
-    [processAudioFile],
+    [processFileDirect],
   );
 
   const handleSelectSermon = useCallback((item: SermonHistoryItem) => {
@@ -348,6 +354,17 @@ function App() {
             </div>
 
             <PendingSyncBanner />
+            <PendingPartialTranscriptBanner
+              onResume={(transcript) => {
+                openTranscriptReview(transcript, 'upload');
+              }}
+            />
+
+            <div className="w-full max-w-3xl mx-auto p-4 bg-indigo-50/80 border border-indigo-100 rounded-2xl text-sm text-indigo-900/70 font-serif italic text-center">
+              <strong className="font-black not-italic text-indigo-950">Long sermons (45+ min):</strong>{' '}
+              Phone Voice Memos → Upload → <strong className="not-italic">Paste Text</strong> is most reliable.
+              Or use Live Recording / Transcribe Audio, review &amp; edit the text, then build your study guide.
+            </div>
 
             {/* Input method grid */}
             <div className="w-full">
@@ -370,15 +387,15 @@ function App() {
                   <InputCard
                     icon={FileAudio}
                     accent="indigo"
-                    title="Audio Upload"
-                    description="Import MP3s or recordings. Perfect for your church's archive."
-                    onClick={() => { setInitialUploadMode('file'); setCurrentScreen('upload'); }}
+                    title="Transcribe Audio"
+                    description="Upload a recording — get editable text first, then your study guide."
+                    onClick={() => { setInitialUploadMode('transcribe'); setCurrentScreen('upload'); }}
                   />
                   <InputCard
                     icon={FileText}
                     accent="indigo"
                     title="Paste Text"
-                    description="Drop in transcripts or raw notes to build a study guide."
+                    description="Already have a transcript? Best for hour-long sermons."
                     onClick={() => { setInitialUploadMode('text'); setCurrentScreen('upload'); }}
                   />
                 </div>
@@ -461,10 +478,13 @@ function App() {
           <UploadSermon
             onProcessTranscript={handleProcessTranscript}
             onProcessFile={handleProcessFile}
+            onTranscribeFile={transcribeOnlyFile}
             onCancel={() => setCurrentScreen('home')}
             isLoading={isLoading}
             error={error}
             initialMode={initialUploadMode}
+            initialText={uploadDraftText}
+            onInitialTextConsumed={() => setUploadDraftText('')}
           />
         );
 
@@ -489,7 +509,11 @@ function App() {
 
       case 'history':
         return (
-          <SermonHistory
+          <>
+            <PendingPartialTranscriptBanner
+              onResume={(transcript) => openTranscriptReview(transcript, 'upload')}
+            />
+            <SermonHistory
             history={history}
             onSelectSermon={handleSelectSermon}
             onDeleteItem={handleDeleteItem}
@@ -497,6 +521,7 @@ function App() {
             onLoadDemo={handleLoadDemo}
             activeUserId={user?.id || 'guest'}
           />
+          </>
         );
 
       case 'summary':
@@ -626,7 +651,14 @@ function App() {
       {pendingReview && (
         <TranscriptReviewModal
           transcript={pendingReview.transcript}
+          fileName={pendingReview.file?.name}
           onConfirm={confirmTranscriptReview}
+          onSaveForLater={async (text) => {
+            await saveTranscriptForLater(text);
+            setUploadDraftText(text);
+            setInitialUploadMode('text');
+            setCurrentScreen('upload');
+          }}
           onReRecord={() => {
             dismissTranscriptReview();
             setCurrentScreen(pendingReview.sourceType === 'live' ? 'listening' : 'upload');

@@ -4,6 +4,7 @@ import { Button } from './Button';
 import { Mic, StopCircle, X, Send, StickyNote, RotateCcw, Waves, Sparkles, Heart, Clock } from 'lucide-react';
 import { saveLiveDraft, getLiveDraft, clearLiveDraft } from '../services/storageService';
 import { LONG_RECORDING_WARN_SECONDS } from '../constants/ai';
+import { downloadBlob } from '../services/recordingStore';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface AudioRecorderProps {
@@ -227,7 +228,12 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({ onStopRecording, o
 
           const audioBlob = new Blob(audioChunksRef.current, { type: baseMimeType });
           const audioFile = new File([audioBlob], `live-sermon-${Date.now()}.${extension}`, { type: baseMimeType });
-          
+
+          // Backup download so a failed transcription does not lose the sermon
+          if (audioBlob.size > 0) {
+            downloadBlob(audioBlob, audioFile.name);
+          }
+
           await onStopRecording('', liveNotesRef.current, audioFile);
           await clearLiveDraft();
         } catch (err) {
@@ -338,8 +344,9 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({ onStopRecording, o
                 </p>
               )}
               {isRecording && recordingDuration >= LONG_RECORDING_WARN_SECONDS && (
-                <p className="mt-4 text-sm font-bold text-amber-700 bg-amber-50 px-4 py-2 rounded-xl border border-amber-200">
-                  Long sermon — expect ~15–20 minutes to transcribe and build your study guide. Stay on Wi‑Fi with this tab open.
+                <p className="mt-4 text-sm font-bold text-amber-800 bg-amber-50 px-4 py-3 rounded-xl border border-amber-200 max-w-md mx-auto leading-relaxed">
+                  Long sermon: transcription can take 15–20 min and may fail on some phones.
+                  Consider Voice Memos → Upload → <strong>Paste Text</strong>, or finish here — your audio will download as a backup.
                 </p>
               )}
 
@@ -376,8 +383,8 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({ onStopRecording, o
               </div>
               <p className="text-sm font-serif italic text-indigo-900/40">
                 {isRecording
-                  ? 'Recording the sermon — we will transcribe it when you finish.'
-                  : 'Record the full sermon, then we transcribe it and build your study guide.'}
+                  ? 'Step 1: record — then we transcribe to editable text (study guide comes after you review).'
+                  : 'Record the sermon, transcribe to text, edit if needed, then build your study guide.'}
               </p>
             </div>
 
@@ -389,8 +396,8 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({ onStopRecording, o
                   className="btn-sacred-primary flex-1 py-4 bg-rose-600 hover:bg-rose-700 disabled:opacity-80"
                 >
                   {isFinishing || isLoading
-                    ? 'Finishing recording → transcribing…'
-                    : 'Finish Recording → Transcribe'}
+                    ? 'Transcribing… (keep screen on)'
+                    : 'Finish → Transcribe to Text'}
                 </button>
               )}
               <button
