@@ -9,6 +9,7 @@
  */
 
 import { BibleVerseData, BibleTranslation, ParsedVerseRef } from '../types';
+import { normalizeBibleReference } from '../lib/bibleReference';
 
 // ── Supported translations ────────────────────────────────────────────────────
 
@@ -22,35 +23,41 @@ export const BIBLE_TRANSLATIONS: BibleTranslation[] = [
 
 export const DEFAULT_TRANSLATION = 'kjv';
 
+export { normalizeBibleReference } from '../lib/bibleReference';
+
 // ── Verse fetching ────────────────────────────────────────────────────────────
 
-const BASE_URL = 'https://bible-api.com';
-
-// Simple in-memory cache so repeated lookups don't hit the network
 const cache = new Map<string, BibleVerseData>();
 
 export async function fetchVerse(
   reference: string,
   translation: string = DEFAULT_TRANSLATION,
 ): Promise<BibleVerseData> {
-  const key = `${translation}::${reference}`;
+  const cleaned = normalizeBibleReference(reference);
+  const key = `${translation}::${cleaned}`;
   if (cache.has(key)) return cache.get(key)!;
 
-  const encoded = encodeURIComponent(reference);
-  const url = `${BASE_URL}/${encoded}?translation=${translation}`;
-
-  const res = await fetch(url);
+  const params = new URLSearchParams({
+    reference: cleaned,
+    translation,
+  });
+  const res = await fetch(`/api/bible/verse?${params.toString()}`);
   if (!res.ok) {
-    throw new Error(`Bible API error ${res.status} for "${reference}" (${translation})`);
+    let message = `Bible API error ${res.status} for "${cleaned}" (${translation})`;
+    try {
+      const body = (await res.json()) as { error?: string };
+      if (body.error) message = body.error;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(message);
   }
 
-  const data = await res.json();
-
-  // bible-api.com returns { reference, text, verses[], translation_id, ... }
+  const data = (await res.json()) as BibleVerseData;
   const result: BibleVerseData = {
-    reference: data.reference ?? reference,
+    reference: data.reference ?? cleaned,
     text: (data.text ?? '').trim(),
-    translation: translation.toUpperCase(),
+    translation: (data.translation ?? translation).toUpperCase(),
   };
 
   cache.set(key, result);

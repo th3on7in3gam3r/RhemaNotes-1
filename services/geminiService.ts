@@ -162,7 +162,7 @@ Rules:
 - Output ONLY the transcript as plain text (no JSON, no markdown headings, no commentary).
 - Remove filler words (um, uh, repeated stutters) but preserve the speaker's meaning and order.
 - Use paragraph breaks for natural pauses or topic shifts.
-- Write scripture references exactly as spoken (e.g. "John 3:16").
+- Write scripture references exactly as spoken (e.g. "John 3:16") — no parenthetical notes like "(implied)" or "[paraphrased]".
 - If a segment is unintelligible, write [inaudible] for that part only.
 - Do not summarize or shorten — transcribe the full spoken message.`;
 

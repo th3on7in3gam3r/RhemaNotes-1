@@ -32,6 +32,7 @@ import { checkRateLimit, clientRateLimitKey } from './rateLimit';
 import { syncUserTierFromStripe, tierFromPriceId, upsertUserTier } from './stripeTier';
 import { isFounderAccount } from './founder';
 import { submitWhisperTranscription, fetchWhisperTaskStatus } from './whisperTranscribe';
+import { resolveBibleVerse } from './bibleVerse';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -62,6 +63,8 @@ interface Env {
   GEMINI_API_KEY?: string;
   /** Whisper API (whisper-api.com) for long audio transcription */
   WHISPER_API_KEY?: string;
+  /** API.Bible key (api.bible) — optional fallback for verse lookup */
+  BIBLE_API_KEY?: string;
 }
 
 interface SermonKVEntry {
@@ -109,6 +112,10 @@ export default {
 
     if (path === '/api/public-config' && request.method === 'GET') {
       return handlePublicConfigAPI(env);
+    }
+
+    if (path === '/api/bible/verse' && request.method === 'GET') {
+      return handleBibleVerseAPI(request, env);
     }
 
     if (path === '/api/transcribe' && request.method === 'POST') {
@@ -462,6 +469,34 @@ async function handlePublicConfigAPI(env: Env): Promise<Response> {
     }),
     { headers: whisperCors },
   );
+}
+
+async function handleBibleVerseAPI(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const reference = url.searchParams.get('reference')?.trim();
+  const translation = (url.searchParams.get('translation') || 'kjv').toLowerCase();
+
+  if (!reference) {
+    return new Response(JSON.stringify({ error: 'Missing reference query param' }), {
+      status: 400,
+      headers: whisperCors,
+    });
+  }
+
+  try {
+    const result = await resolveBibleVerse(reference, translation, env.BIBLE_API_KEY);
+    return new Response(
+      JSON.stringify({
+        reference: result.reference,
+        text: result.text,
+        translation: result.translation,
+      }),
+      { headers: whisperCors },
+    );
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Verse lookup failed';
+    return new Response(JSON.stringify({ error: message }), { status: 404, headers: whisperCors });
+  }
 }
 
 async function handleTranscribeSubmitAPI(request: Request, env: Env): Promise<Response> {

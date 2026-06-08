@@ -15,6 +15,7 @@ import {
   BIBLE_TRANSLATIONS,
   DEFAULT_TRANSLATION,
   splitTextWithRefs,
+  normalizeBibleReference,
 } from '../services/bibleService';
 import { isScriptureSaved, toggleSavedScripture } from '../services/storageService';
 import { ScriptureSaveButton } from './ScriptureSaveButton';
@@ -124,7 +125,14 @@ const VerseModal: React.FC<VerseModalProps> = ({
         <div className="flex items-center justify-between px-6 py-4 bg-blue-900 text-white rounded-t-3xl flex-shrink-0 gap-3">
           <div className="flex items-center space-x-3 min-w-0">
             <BookOpen className="w-6 h-6 flex-shrink-0" />
-            <h2 className="text-xl font-extrabold truncate">{reference}</h2>
+            <h2 className="text-xl font-extrabold truncate">
+              {normalizeBibleReference(reference)}
+              {normalizeBibleReference(reference) !== reference && (
+                <span className="block text-xs font-normal text-blue-200/80 mt-0.5 truncate">
+                  sermon note: {reference}
+                </span>
+              )}
+            </h2>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             {saveAction && (
