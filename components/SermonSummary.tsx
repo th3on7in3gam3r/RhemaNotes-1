@@ -2,16 +2,16 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { SermonSummaryOutput } from '../types';
 import { Button } from './Button';
 import { TranscriptTab } from './TranscriptTab';
-import { ScripturesTab } from './ScripturesTab';
 import { ApplyTab } from './ApplyTab';
 import { NotesTab } from './NotesTab';
 import { StudySystem } from './StudySystem';
 import { BibleTab } from './BibleTab';
+import { ScriptureSaveButton } from './ScriptureSaveButton';
 import { processSermonTranscript, generateGuidedPrompts } from '../services/geminiService';
 import localforage from 'localforage';
-import { updateSermonInHistory, saveScripture, removeSavedScripture, isScriptureSaved, getSavedScriptures } from '../services/storageService';
+import { updateSermonInHistory, isScriptureSaved, toggleSavedScripture } from '../services/storageService';
 import { setPageMeta, buildSermonMeta } from '../services/seoService';
-import { BookOpen, RefreshCw, CheckCircle2, Copy, Sparkles, MessageSquare, Book, ChevronRight, Waves, Heart, FileText, Bookmark } from 'lucide-react';
+import { BookOpen, RefreshCw, CheckCircle2, Copy, Sparkles, MessageSquare, Book, ChevronRight, Waves, Heart, FileText } from 'lucide-react';
 import { SermonChat } from './SermonChat';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSubscription } from '../hooks/useSubscription';
@@ -29,11 +29,12 @@ interface SermonSummaryProps {
   onUpdateHistory?: (updatedSummary: SermonSummaryOutput) => void;
   activeUserId?: string;
   creatorId?: string;
+  onScripturesChange?: () => void;
 }
 
 export const SermonSummary: React.FC<SermonSummaryProps> = ({
   summary, onGoHome, includeReflection, onToggleReflection, isLoading, historyId, onUpdateHistory,
-  activeUserId, creatorId,
+  activeUserId, creatorId, onScripturesChange,
 }) => {
   const [sidebarView, setSidebarView] = useState<'chat' | 'bible'>('chat');
   const [currentSummary, setCurrentSummary] = useState<SermonSummaryOutput>(summary);
@@ -66,24 +67,76 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
   });
 
   const handleSaveScripture = (scripture: { reference: string; plain_meaning: string; speaker_usage: string }) => {
-    if (!historyId) return;
-    const alreadySaved = savedRefs.has(scripture.reference);
-    if (alreadySaved) {
-      const all = getSavedScriptures();
-      const match = all.find(s => s.reference === scripture.reference && s.sermonId === historyId);
-      if (match) removeSavedScripture(match.id);
-      setSavedRefs(prev => { const next = new Set(prev); next.delete(scripture.reference); return next; });
-    } else {
-      saveScripture({
-        reference: scripture.reference,
-        plain_meaning: scripture.plain_meaning,
-        speaker_usage: scripture.speaker_usage,
-        sermonId: historyId,
-        sermonTitle: currentSummary.title || 'Untitled Sermon',
-      });
-      setSavedRefs(prev => new Set(prev).add(scripture.reference));
+    if (!historyId) {
+      alert('Save a sermon to your Library first, then open it again to bookmark scriptures.');
+      return;
     }
+    const nowSaved = toggleSavedScripture(
+      scripture,
+      historyId,
+      currentSummary.title || 'Untitled Sermon',
+    );
+    setSavedRefs(prev => {
+      const next = new Set(prev);
+      if (nowSaved) next.add(scripture.reference);
+      else next.delete(scripture.reference);
+      return next;
+    });
+    onScripturesChange?.();
   };
+
+  const renderScriptureFoundation = () => (
+    <div className="sacred-card p-10 border border-amber-100 bg-gradient-to-br from-white to-amber-50/30">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
+        <div className="flex items-center space-x-3">
+          <Book className="w-6 h-6 text-amber-500" />
+          <h3 className="text-2xl font-serif font-black text-indigo-950">Scripture Foundation</h3>
+        </div>
+        <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">
+          Tap Save → appears on your Profile dashboard
+        </p>
+      </div>
+      <p className="text-sm text-indigo-900/50 font-serif italic mb-6">
+        Bookmark verses you want to revisit — they show up under Saved Scriptures on your dashboard.
+      </p>
+
+      <div className="flex flex-wrap gap-3">
+        {currentSummary.scriptures.map((scripture, i) => {
+          const saved = savedRefs.has(scripture.reference);
+          return (
+            <div key={i} className="group relative">
+              <div className="flex items-center gap-2 bg-white border border-indigo-100 hover:border-amber-300 rounded-2xl shadow-sm transition-all hover:-translate-y-0.5 overflow-hidden pr-1">
+                <button
+                  type="button"
+                  onClick={() => openInBible(scripture.reference)}
+                  className="px-4 py-3 text-sm font-serif font-bold italic text-indigo-950 hover:bg-amber-50 transition-colors text-left"
+                >
+                  {scripture.reference}
+                </button>
+                <ScriptureSaveButton saved={saved} onClick={() => handleSaveScripture(scripture)} />
+              </div>
+
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 w-64 p-4 bg-indigo-950 text-white rounded-2xl shadow-2xl opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 transition-all z-[70] text-left">
+                <p className="text-[10px] font-black uppercase tracking-widest text-amber-400 mb-2">Divine Meaning</p>
+                <p className="text-xs font-serif italic leading-relaxed text-amber-50">
+                  &ldquo;{scripture.plain_meaning}&rdquo;
+                </p>
+                <div className="absolute top-full left-1/2 -translate-x-1/2 w-3 h-3 bg-indigo-950 rotate-45 -mt-1.5" />
+              </div>
+            </div>
+          );
+        })}
+        {currentSummary.scriptures.length === 0 && (
+          <p className="text-lg text-indigo-900/30 font-serif italic">No scriptures detected in this journey.</p>
+        )}
+      </div>
+      {savedRefs.size > 0 && (
+        <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-amber-600">
+          {savedRefs.size} scripture{savedRefs.size !== 1 ? 's' : ''} saved to your profile
+        </p>
+      )}
+    </div>
+  );
 
   useEffect(() => { 
     setCurrentSummary(summary); 
@@ -235,6 +288,8 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
           <div className="absolute -right-20 -bottom-20 w-80 h-80 bg-indigo-100/30 rounded-full blur-[100px] pointer-events-none" />
         </div>
 
+        {renderScriptureFoundation()}
+
         {/* Study Portal */}
         <div className="sacred-card p-10 border border-indigo-50">
           <div className="flex items-center justify-between mb-8">
@@ -301,60 +356,6 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
               </motion.div>
             )}
           </AnimatePresence>
-        </div>
-
-        {/* Sacred Scriptures List */}
-        <div className="sacred-card p-10 border border-amber-100 bg-gradient-to-br from-white to-amber-50/30">
-          <div className="flex items-center space-x-3 mb-6">
-             <Book className="w-6 h-6 text-amber-500" />
-             <h3 className="text-2xl font-serif font-black text-indigo-950">Scripture Foundation</h3>
-          </div>
-          
-          <div className="flex flex-wrap gap-3">
-            {currentSummary.scriptures.map((scripture, i) => {
-              const saved = savedRefs.has(scripture.reference);
-              return (
-                <div key={i} className="group relative">
-                  <div className="flex items-center gap-1 bg-white border border-indigo-100 hover:border-amber-300 rounded-2xl shadow-sm transition-all hover:-translate-y-0.5 overflow-hidden">
-                    <button
-                      onClick={() => openInBible(scripture.reference)}
-                      className="px-4 py-3 text-sm font-serif font-bold italic text-indigo-950 hover:bg-amber-50 transition-colors"
-                    >
-                      {scripture.reference}
-                    </button>
-                    <button
-                      onClick={() => handleSaveScripture(scripture)}
-                      title={saved ? 'Remove from saved scriptures' : 'Save to your profile'}
-                      className={`px-3 py-3 border-l transition-colors ${
-                        saved
-                          ? 'text-amber-600 bg-amber-50 border-amber-200 hover:bg-amber-100'
-                          : 'text-indigo-300 border-indigo-100 hover:text-amber-500 hover:bg-amber-50'
-                      }`}
-                    >
-                      <Bookmark className={`w-3.5 h-3.5 ${saved ? 'fill-current' : ''}`} />
-                    </button>
-                  </div>
-
-                  {/* Tooltip */}
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 w-64 p-4 bg-indigo-950 text-white rounded-2xl shadow-2xl opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 transition-all z-[70] text-left">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-amber-400 mb-2">Divine Meaning</p>
-                    <p className="text-xs font-serif italic leading-relaxed text-amber-50">
-                      "{scripture.plain_meaning}"
-                    </p>
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 w-3 h-3 bg-indigo-950 rotate-45 -mt-1.5" />
-                  </div>
-                </div>
-              );
-            })}
-            {currentSummary.scriptures.length === 0 && (
-              <p className="text-lg text-indigo-900/30 font-serif italic">No scriptures detected in this journey.</p>
-            )}
-          </div>
-          {savedRefs.size > 0 && (
-            <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-amber-600">
-              {savedRefs.size} scripture{savedRefs.size !== 1 ? 's' : ''} saved to your profile
-            </p>
-          )}
         </div>
 
         {/* Reflection Journal Section */}
@@ -609,7 +610,14 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
                   </div>
                 )
               ) : (
-                <BibleTab summary={currentSummary} onUpdateSummary={handleUpdateSummarization} initialReference={bibleInitialRef} />
+                <BibleTab
+                  summary={currentSummary}
+                  onUpdateSummary={handleUpdateSummarization}
+                  initialReference={bibleInitialRef}
+                  historyId={historyId}
+                  sermonTitle={currentSummary.title || 'Untitled Sermon'}
+                  onScripturesChange={onScripturesChange}
+                />
               )}
             </motion.div>
           </AnimatePresence>

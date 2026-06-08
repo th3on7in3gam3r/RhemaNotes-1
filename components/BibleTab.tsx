@@ -16,6 +16,8 @@ import {
   DEFAULT_TRANSLATION,
   splitTextWithRefs,
 } from '../services/bibleService';
+import { isScriptureSaved, toggleSavedScripture } from '../services/storageService';
+import { ScriptureSaveButton } from './ScriptureSaveButton';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -24,6 +26,9 @@ interface BibleTabProps {
   onUpdateSummary: (updated: SermonSummaryOutput) => void;
   /** Optional: open the tab pre-focused on a specific reference */
   initialReference?: string;
+  historyId?: string;
+  sermonTitle?: string;
+  onScripturesChange?: () => void;
 }
 
 // ── Highlight colour palette ──────────────────────────────────────────────────
@@ -62,6 +67,7 @@ interface VerseModalProps {
   onSaveAnnotation: (ref: string, text: string) => void;
   onRemoveAnnotation: (id: string) => void;
   onChangeTranslation: (t: string) => void;
+  saveAction?: { saved: boolean; onToggle: () => void };
 }
 
 const VerseModal: React.FC<VerseModalProps> = ({
@@ -75,6 +81,7 @@ const VerseModal: React.FC<VerseModalProps> = ({
   onSaveAnnotation,
   onRemoveAnnotation,
   onChangeTranslation,
+  saveAction,
 }) => {
   const [verseData, setVerseData] = useState<BibleVerseData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -114,19 +121,27 @@ const VerseModal: React.FC<VerseModalProps> = ({
     >
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden border border-blue-100">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 bg-blue-900 text-white rounded-t-3xl flex-shrink-0">
-          <div className="flex items-center space-x-3">
-            <BookOpen className="w-6 h-6" />
-            <h2 className="text-xl font-extrabold">{reference}</h2>
+        <div className="flex items-center justify-between px-6 py-4 bg-blue-900 text-white rounded-t-3xl flex-shrink-0 gap-3">
+          <div className="flex items-center space-x-3 min-w-0">
+            <BookOpen className="w-6 h-6 flex-shrink-0" />
+            <h2 className="text-xl font-extrabold truncate">{reference}</h2>
           </div>
-          {/* Always-visible close button — works on both desktop and mobile */}
-          <button
-            onClick={onClose}
-            className="w-9 h-9 flex items-center justify-center bg-blue-700 hover:bg-blue-600 active:bg-blue-500 rounded-full transition-colors"
-            aria-label="Close"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {saveAction && (
+              <ScriptureSaveButton
+                saved={saveAction.saved}
+                onClick={saveAction.onToggle}
+                className="!border-white/30 !bg-white/10 !text-white hover:!bg-amber-100 hover:!text-amber-900"
+              />
+            )}
+            <button
+              onClick={onClose}
+              className="w-9 h-9 flex items-center justify-center bg-blue-700 hover:bg-blue-600 active:bg-blue-500 rounded-full transition-colors"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Translation selector */}
@@ -331,10 +346,22 @@ export const BibleTab: React.FC<BibleTabProps> = ({
   summary,
   onUpdateSummary,
   initialReference,
+  historyId,
+  sermonTitle = 'Untitled Sermon',
+  onScripturesChange,
 }) => {
   const [activeReference, setActiveReference] = useState<string | null>(
     initialReference ?? null,
   );
+  const [savedRefs, setSavedRefs] = useState<Set<string>>(() => {
+    const set = new Set<string>();
+    if (historyId) {
+      summary.scriptures?.forEach(s => {
+        if (isScriptureSaved(s.reference, historyId)) set.add(s.reference);
+      });
+    }
+    return set;
+  });
   const [translation, setTranslation] = useState(DEFAULT_TRANSLATION);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResult, setSearchResult] = useState<string | null>(null);
@@ -437,6 +464,28 @@ export const BibleTab: React.FC<BibleTabProps> = ({
 
   const sermonRefs = summary.scriptures ?? [];
 
+  const handleSaveScripture = useCallback(
+    (scripture: { reference: string; plain_meaning: string; speaker_usage: string }) => {
+      if (!historyId) {
+        alert('Save a sermon to your Library first, then open it again to bookmark scriptures.');
+        return;
+      }
+      const nowSaved = toggleSavedScripture(scripture, historyId, sermonTitle);
+      setSavedRefs(prev => {
+        const next = new Set(prev);
+        if (nowSaved) next.add(scripture.reference);
+        else next.delete(scripture.reference);
+        return next;
+      });
+      onScripturesChange?.();
+    },
+    [historyId, sermonTitle, onScripturesChange],
+  );
+
+  const activeSermonScripture = activeReference
+    ? sermonRefs.find(s => s.reference === activeReference)
+    : undefined;
+
   return (
     <div className="p-5 h-full overflow-y-auto bg-transparent">
       {/* Header */}
@@ -483,29 +532,36 @@ export const BibleTab: React.FC<BibleTabProps> = ({
       {sermonRefs.length > 0 && (
         <div className="mb-8">
           <h4 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-4">
-            References from this sermon ({sermonRefs.length})
+            References from this sermon ({sermonRefs.length}) — Save to your profile
           </h4>
           <div className="flex flex-wrap gap-3">
             {sermonRefs.map((s, i) => {
               const hl = highlights.find(h => h.reference === s.reference);
               const cc = hl ? colorClasses(hl.color) : null;
               const hasAnnotation = annotations.some(a => a.reference === s.reference);
+              const saved = savedRefs.has(s.reference);
               return (
-                <button
-                  key={i}
-                  onClick={() => setActiveReference(s.reference)}
-                  className={`group flex items-center space-x-2 px-4 py-2 rounded-full border-2 font-bold text-sm transition-all hover:scale-105 active:scale-95 shadow-sm ${
-                    cc
-                      ? `${cc.bg} ${cc.border} ${cc.text}`
-                      : 'bg-blue-50 border-blue-200 text-blue-800 hover:bg-blue-100'
-                  }`}
-                >
-                  <BookOpen className="w-4 h-4" />
-                  <span>{s.reference}</span>
-                  {hasAnnotation && (
-                    <MessageSquare className="w-3 h-3 opacity-70" />
-                  )}
-                </button>
+                <div key={i} className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setActiveReference(s.reference)}
+                    className={`group flex items-center space-x-2 px-4 py-2 rounded-full border-2 font-bold text-sm transition-all hover:scale-105 active:scale-95 shadow-sm ${
+                      cc
+                        ? `${cc.bg} ${cc.border} ${cc.text}`
+                        : 'bg-blue-50 border-blue-200 text-blue-800 hover:bg-blue-100'
+                    }`}
+                  >
+                    <BookOpen className="w-4 h-4" />
+                    <span>{s.reference}</span>
+                    {hasAnnotation && (
+                      <MessageSquare className="w-3 h-3 opacity-70" />
+                    )}
+                  </button>
+                  <ScriptureSaveButton
+                    saved={saved}
+                    onClick={() => handleSaveScripture(s)}
+                    showLabel={false}
+                  />
+                </div>
               );
             })}
           </div>
@@ -568,6 +624,14 @@ export const BibleTab: React.FC<BibleTabProps> = ({
           onSaveAnnotation={handleSaveAnnotation}
           onRemoveAnnotation={handleRemoveAnnotation}
           onChangeTranslation={setTranslation}
+          saveAction={
+            activeSermonScripture
+              ? {
+                  saved: savedRefs.has(activeSermonScripture.reference),
+                  onToggle: () => handleSaveScripture(activeSermonScripture),
+                }
+              : undefined
+          }
         />
       )}
     </div>

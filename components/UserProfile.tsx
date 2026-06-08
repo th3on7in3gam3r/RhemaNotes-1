@@ -255,8 +255,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({
                    <Bookmark className="w-8 h-8 text-amber-300" />
                  </div>
                  <p className="font-serif italic text-indigo-900/40 text-lg">No scriptures saved yet.</p>
-                 <p className="text-xs text-indigo-900/30 mt-2 font-bold uppercase tracking-widest">
-                   Tap the bookmark icon on any scripture to save it here.
+                 <p className="text-xs text-indigo-900/30 mt-2 font-bold uppercase tracking-widest max-w-sm mx-auto leading-relaxed">
+                   Open a study guide → Scripture Foundation or Bible Reader → tap Save on any verse.
                  </p>
                </div>
              ) : (

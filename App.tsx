@@ -550,6 +550,7 @@ function App() {
             onUpdateHistory={handleUpdateHistory}
             activeUserId={user?.id || 'guest'}
             creatorId={history.find(h => h.id === selectedHistoryId)?.user_id}
+            onScripturesChange={() => setSavedScriptures(getSavedScriptures())}
           />
 
         ) : (

@@ -134,6 +134,29 @@ export const isScriptureSaved = (reference: string, sermonId: string): boolean =
   return getSavedScriptures().some(s => s.reference === reference && s.sermonId === sermonId);
 };
 
+/** Save or remove a scripture; returns true if now saved. */
+export const toggleSavedScripture = (
+  scripture: { reference: string; plain_meaning: string; speaker_usage: string },
+  sermonId: string,
+  sermonTitle: string,
+): boolean => {
+  if (isScriptureSaved(scripture.reference, sermonId)) {
+    const match = getSavedScriptures().find(
+      s => s.reference === scripture.reference && s.sermonId === sermonId,
+    );
+    if (match) removeSavedScripture(match.id);
+    return false;
+  }
+  saveScripture({
+    reference: scripture.reference,
+    plain_meaning: scripture.plain_meaning,
+    speaker_usage: scripture.speaker_usage,
+    sermonId,
+    sermonTitle,
+  });
+  return true;
+};
+
 // ── Guest → User claim ───────────────────────────────────────────────────────
 
 /**
