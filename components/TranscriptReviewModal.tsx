@@ -10,6 +10,7 @@ interface TranscriptReviewModalProps {
   onSaveForLater?: (editedTranscript: string) => void;
   isLoading?: boolean;
   fileName?: string;
+  speakerLabel?: string;
 }
 
 export const TranscriptReviewModal: React.FC<TranscriptReviewModalProps> = ({
@@ -19,6 +20,7 @@ export const TranscriptReviewModal: React.FC<TranscriptReviewModalProps> = ({
   onSaveForLater,
   isLoading,
   fileName = 'sermon-transcript.txt',
+  speakerLabel,
 }) => {
   const [edited, setEdited] = useState(transcript);
   const [copied, setCopied] = useState(false);
@@ -49,6 +51,9 @@ export const TranscriptReviewModal: React.FC<TranscriptReviewModalProps> = ({
             <p className="text-sm text-indigo-900/50 font-serif italic">
               Fix names or verses, then build your study guide — or save text for later.
             </p>
+            {speakerLabel && (
+              <p className="text-xs font-bold text-amber-700 mt-1">Speaker: {speakerLabel}</p>
+            )}
           </div>
         </div>
 

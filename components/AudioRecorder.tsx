@@ -5,10 +5,18 @@ import { Mic, StopCircle, X, Send, StickyNote, RotateCcw, Waves, Sparkles, Heart
 import { saveLiveDraft, getLiveDraft, clearLiveDraft } from '../services/storageService';
 import { LONG_RECORDING_WARN_SECONDS } from '../constants/ai';
 import { downloadBlob } from '../services/recordingStore';
+import { SermonSpeakerFields } from './SermonSpeakerFields';
+import { speakerInputToMeta, type SermonSpeakerMeta } from '../lib/speakerMeta';
+import { loadSpeakerPrefs, saveSpeakerPrefs } from '../services/speakerPrefs';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface AudioRecorderProps {
-  onStopRecording: (transcript: string, notes?: UserNote[], file?: File) => Promise<void>;
+  onStopRecording: (
+    transcript: string,
+    notes?: UserNote[],
+    file?: File,
+    speaker?: SermonSpeakerMeta,
+  ) => Promise<void>;
   onCancel: () => void;
   isLoading: boolean;
   error: string | null;
@@ -25,6 +33,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({ onStopRecording, o
   const liveNotesRef = useRef<UserNote[]>([]);
   const [currentDraftNote, setCurrentDraftNote] = useState<string>('');
   const [isFinishing, setIsFinishing] = useState(false);
+  const [speaker, setSpeaker] = useState(loadSpeakerPrefs);
   const wakeLockRef = useRef<any>(null);
 
   const requestWakeLock = async () => {
@@ -234,7 +243,9 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({ onStopRecording, o
             downloadBlob(audioBlob, audioFile.name);
           }
 
-          await onStopRecording('', liveNotesRef.current, audioFile);
+          saveSpeakerPrefs(speaker);
+          const speakerMeta = speakerInputToMeta(speaker);
+          await onStopRecording('', liveNotesRef.current, audioFile, speakerMeta);
           await clearLiveDraft();
         } catch (err) {
           console.error('Error finishing live recording:', err);
@@ -257,7 +268,7 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({ onStopRecording, o
         window.clearInterval(intervalRef.current);
       }
     }
-  }, [onStopRecording, liveNotes]);
+  }, [onStopRecording, liveNotes, speaker]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && isRecording) {
@@ -309,6 +320,17 @@ export const AudioRecorder: React.FC<AudioRecorderProps> = ({ onStopRecording, o
             <h2 className="text-4xl font-serif font-black text-indigo-950 mb-4 tracking-tight leading-none">
               {isRecording ? 'Capturing Wisdom' : 'Begin Recording'}
             </h2>
+
+            {!isRecording && (
+              <div className="w-full max-w-md mx-auto text-left">
+                <SermonSpeakerFields
+                  value={speaker}
+                  onChange={setSpeaker}
+                  disabled={isLoading || isFinishing}
+                  compact
+                />
+              </div>
+            )}
 
             <div className="flex flex-col items-center justify-center w-full my-12">
               <div className="relative w-56 h-56 flex items-center justify-center">

@@ -15,6 +15,7 @@ import { getSavedScriptures } from './services/storageService';
 import { getYouTubeTranscript } from './services/youtubeService';
 import { setAuthTokenGetter } from './services/apiAuth';
 import { useSermonProcessing } from './hooks/useSermonProcessing';
+import type { SermonSpeakerMeta } from './lib/speakerMeta';
 import { ProcessingOverlay } from './components/ProcessingOverlay';
 import { TranscriptReviewModal } from './components/TranscriptReviewModal';
 import { UploadSermon } from './components/UploadSermon';
@@ -219,21 +220,35 @@ function App() {
   };
 
   const handleProcessTranscript = useCallback(
-    async (transcript: string, liveNotes?: UserNote[], file?: File) => {
+    async (transcript: string, speaker?: SermonSpeakerMeta, liveNotes?: UserNote[], file?: File) => {
       if (file) {
-        await processAudioFile(file, 'live', liveNotes);
+        await processAudioFile(file, 'live', liveNotes, speaker);
       } else {
-        await processText(transcript, 'text', liveNotes);
+        await processText(transcript, 'text', liveNotes, speaker);
       }
     },
     [processAudioFile, processText],
   );
 
+  const handleUploadTranscript = useCallback(
+    async (transcript: string, speaker?: SermonSpeakerMeta) => {
+      await processText(transcript, 'text', undefined, speaker);
+    },
+    [processText],
+  );
+
   const handleProcessFile = useCallback(
-    async (file: File) => {
-      await processFileDirect(file, 'upload');
+    async (file: File, speaker?: SermonSpeakerMeta) => {
+      await processFileDirect(file, 'upload', speaker);
     },
     [processFileDirect],
+  );
+
+  const handleTranscribeFile = useCallback(
+    async (file: File, speaker?: SermonSpeakerMeta) => {
+      await transcribeOnlyFile(file, speaker);
+    },
+    [transcribeOnlyFile],
   );
 
   const handleSelectSermon = useCallback((item: SermonHistoryItem) => {
@@ -480,7 +495,9 @@ function App() {
       case 'listening':
         return (
           <AudioRecorder
-            onStopRecording={handleProcessTranscript}
+            onStopRecording={(transcript, liveNotes, file, speaker) =>
+              handleProcessTranscript(transcript, speaker, liveNotes, file)
+            }
             onCancel={() => setCurrentScreen('home')}
             isLoading={isLoading}
             error={error}
@@ -490,9 +507,9 @@ function App() {
       case 'upload':
         return (
           <UploadSermon
-            onProcessTranscript={handleProcessTranscript}
+            onProcessTranscript={handleUploadTranscript}
             onProcessFile={handleProcessFile}
-            onTranscribeFile={transcribeOnlyFile}
+            onTranscribeFile={handleTranscribeFile}
             onCancel={() => setCurrentScreen('home')}
             isLoading={isLoading}
             error={error}
@@ -667,6 +684,13 @@ function App() {
         <TranscriptReviewModal
           transcript={pendingReview.transcript}
           fileName={pendingReview.file?.name}
+          speakerLabel={
+            pendingReview.speakerMeta?.preacher_name || pendingReview.speakerMeta?.speaker_title
+              ? [pendingReview.speakerMeta.speaker_title, pendingReview.speakerMeta.preacher_name]
+                  .filter(Boolean)
+                  .join(' ')
+              : undefined
+          }
           onConfirm={confirmTranscriptReview}
           onSaveForLater={async (text) => {
             await saveTranscriptForLater(text);

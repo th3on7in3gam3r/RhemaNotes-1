@@ -1,12 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { FileAudio, FileText, Loader2, Upload, Mic } from 'lucide-react';
+import { SermonSpeakerFields } from './SermonSpeakerFields';
+import { speakerInputToMeta, type SermonSpeakerMeta } from '../lib/speakerMeta';
+import { loadSpeakerPrefs, saveSpeakerPrefs } from '../services/speakerPrefs';
 
 type UploadMode = 'text' | 'file' | 'transcribe';
 
 interface UploadSermonProps {
-  onProcessTranscript: (t: string) => Promise<void>;
-  onProcessFile: (f: File) => Promise<void>;
-  onTranscribeFile: (f: File) => Promise<void>;
+  onProcessTranscript: (t: string, speaker?: SermonSpeakerMeta) => Promise<void>;
+  onProcessFile: (f: File, speaker?: SermonSpeakerMeta) => Promise<void>;
+  onTranscribeFile: (f: File, speaker?: SermonSpeakerMeta) => Promise<void>;
   onCancel: () => void;
   isLoading: boolean;
   error: string | null;
@@ -29,6 +32,7 @@ export const UploadSermon: React.FC<UploadSermonProps> = ({
   const [file, setFile] = useState<File | null>(null);
   const [mode, setMode] = useState<UploadMode>(initialMode);
   const [busy, setBusy] = useState(false);
+  const [speaker, setSpeaker] = useState(loadSpeakerPrefs);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -45,10 +49,12 @@ export const UploadSermon: React.FC<UploadSermonProps> = ({
 
   const handle = async () => {
     setBusy(true);
+    const speakerMeta = speakerInputToMeta(speaker);
+    saveSpeakerPrefs(speaker);
     try {
-      if (mode === 'text') await onProcessTranscript(text);
-      else if (mode === 'transcribe' && file) await onTranscribeFile(file);
-      else if (mode === 'file' && file) await onProcessFile(file);
+      if (mode === 'text') await onProcessTranscript(text, speakerMeta);
+      else if (mode === 'transcribe' && file) await onTranscribeFile(file, speakerMeta);
+      else if (mode === 'file' && file) await onProcessFile(file, speakerMeta);
     } finally {
       setBusy(false);
     }
@@ -76,6 +82,8 @@ export const UploadSermon: React.FC<UploadSermonProps> = ({
               ? 'Audio → editable text → study guide (two steps, safer for long recordings).'
               : 'Upload audio and run transcription + study guide in one flow.'}
         </p>
+
+        <SermonSpeakerFields value={speaker} onChange={setSpeaker} disabled={isLoading || busy} />
 
         <div className="flex flex-wrap bg-indigo-50/50 p-1.5 rounded-2xl mb-10 gap-1 border border-indigo-100">
           {(['text', 'transcribe', 'file'] as const).map((m) => {

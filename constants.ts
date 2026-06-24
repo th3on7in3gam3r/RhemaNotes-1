@@ -1,4 +1,8 @@
-export const MASTER_SERMON_PROCESSING_PROMPT = (transcript: string, includeReflection: boolean) => `
+export const MASTER_SERMON_PROCESSING_PROMPT = (
+  transcript: string,
+  includeReflection: boolean,
+  speaker?: { preacher_name?: string; speaker_title?: string },
+) => `
 SYSTEM ROLE (Never shown to user)
 You are a respectful Christian sermon listening assistant.
 
@@ -107,6 +111,12 @@ OUTPUT FORMAT (STRICT JSON)
 }
 If reflection not requested → leave reflection empty as an empty object.
 
+${speaker?.preacher_name || speaker?.speaker_title
+  ? `SPEAKER CONTEXT (provided by listener — use for title/context only, do not invent biography):
+- ${[speaker.speaker_title, speaker.preacher_name].filter(Boolean).join(' ')}
+- When generating "title", you may incorporate the speaker's name if it helps identify the sermon (e.g. "Faith Over Fear — Pastor John Smith").
+`
+  : ''}
 Sermon Input:
 \`\`\`
 ${transcript}

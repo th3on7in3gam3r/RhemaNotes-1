@@ -12,6 +12,8 @@ import { saveSermonToHistory } from '../services/storageService';
 import { savePendingTranscript, clearPendingTranscript } from '../services/transcriptCache';
 import { saveLastRecording } from '../services/recordingStore';
 import { ensureAuthToken } from '../services/apiAuth';
+import { applySpeakerMeta, type SermonSpeakerMeta } from '../lib/speakerMeta';
+import { saveSpeakerPrefs } from '../services/speakerPrefs';
 import type { UserTier } from '../constants/features';
 import type { SermonSourceType } from '../types/source';
 import type { SermonHistoryItem, SermonSummaryOutput, UserNote } from '../types';
@@ -21,7 +23,10 @@ export interface PendingTranscriptReview {
   file?: File;
   liveNotes?: UserNote[];
   sourceType: SermonSourceType;
+  speakerMeta?: SermonSpeakerMeta;
 }
+
+export type SermonProcessingMeta = SermonSpeakerMeta & { title?: string };
 
 interface UseSermonProcessingOptions {
   userId: string;
@@ -92,11 +97,13 @@ export function useSermonProcessing({
       sourceType: SermonSourceType,
       liveNotes?: UserNote[],
       file?: File,
+      speakerMeta?: SermonSpeakerMeta,
     ) => {
       if (liveNotes?.length) {
         result.user_notes = [...(result.user_notes || []), ...liveNotes];
       }
       if (file) result.audio_blob = file;
+      applySpeakerMeta(result, speakerMeta);
       const savedItem = await saveSermonToHistory(result, userId, sourceType);
       await clearPendingTranscript();
       onSaved(savedItem, result);
@@ -105,7 +112,13 @@ export function useSermonProcessing({
   );
 
   const runStudyGuide = useCallback(
-    async (transcript: string, sourceType: SermonSourceType, liveNotes?: UserNote[], file?: File) => {
+    async (
+      transcript: string,
+      sourceType: SermonSourceType,
+      liveNotes?: UserNote[],
+      file?: File,
+      speakerMeta?: SermonSpeakerMeta,
+    ) => {
       const controller = beginProcessing();
       setIsLoading(true);
       setError(null);
@@ -115,8 +128,9 @@ export function useSermonProcessing({
           transcript,
           includeReflection,
           controller.signal,
+          speakerMeta,
         );
-        await saveResult(result, sourceType, liveNotes, file);
+        await saveResult(result, sourceType, liveNotes, file, speakerMeta);
       } catch (err) {
         handleError(err);
       } finally {
@@ -133,24 +147,29 @@ export function useSermonProcessing({
       transcript: string,
       sourceType: SermonSourceType = 'text',
       liveNotes?: UserNote[],
-      meta?: { title?: string },
+      meta?: SermonProcessingMeta,
     ) => {
       const controller = beginProcessing();
       setIsLoading(true);
       setError(null);
       setProcessingStatus('Step 2 of 2: Creating your study guide…');
       try {
+        const speakerMeta: SermonSpeakerMeta | undefined =
+          meta?.preacher_name || meta?.speaker_title
+            ? { preacher_name: meta.preacher_name, speaker_title: meta.speaker_title }
+            : undefined;
         const result = await processSermonTranscript(
           transcript,
           includeReflection,
           controller.signal,
+          speakerMeta,
         );
         if (meta?.title && (!result.title || result.title === 'Sermon Summary')) {
           result.title = meta.title;
         } else if (!result.title && sourceType === 'youtube') {
           result.title = 'YouTube Sermon Study';
         }
-        await saveResult(result, sourceType, liveNotes);
+        await saveResult(result, sourceType, liveNotes, undefined, speakerMeta);
       } catch (err) {
         handleError(err);
       } finally {
@@ -162,14 +181,25 @@ export function useSermonProcessing({
   );
 
   const openTranscriptReview = useCallback(
-    (transcript: string, sourceType: SermonSourceType, file?: File, liveNotes?: UserNote[]) => {
-      setPendingReview({ transcript, file, liveNotes, sourceType });
+    (
+      transcript: string,
+      sourceType: SermonSourceType,
+      file?: File,
+      liveNotes?: UserNote[],
+      speakerMeta?: SermonSpeakerMeta,
+    ) => {
+      setPendingReview({ transcript, file, liveNotes, sourceType, speakerMeta });
     },
     [],
   );
 
   const runTranscription = useCallback(
-    async (file: File, sourceType: SermonSourceType, liveNotes?: UserNote[]) => {
+    async (
+      file: File,
+      sourceType: SermonSourceType,
+      liveNotes?: UserNote[],
+      speakerMeta?: SermonSpeakerMeta,
+    ) => {
       const estMin = estimateRecordingMinutes(file);
       if (Number.isFinite(maxAudioMinutes) && maxAudioMinutes < Infinity && estMin > maxAudioMinutes) {
         const planName = tier === 'church' ? 'The Harvest' : tier === 'pro' ? 'The Vine' : 'The Seed';
@@ -222,7 +252,7 @@ export function useSermonProcessing({
         );
         await savePendingTranscript({ transcript, fileName: file.name, savedAt: Date.now() });
         setProcessingStatus(undefined);
-        setPendingReview({ transcript, file, liveNotes, sourceType });
+        setPendingReview({ transcript, file, liveNotes, sourceType, speakerMeta });
       } catch (err) {
         handleError(err);
       } finally {
@@ -235,23 +265,32 @@ export function useSermonProcessing({
 
   /** Audio file / live recording — transcribe, then review */
   const processAudioFile = useCallback(
-    async (file: File, sourceType: SermonSourceType, liveNotes?: UserNote[]) => {
-      await runTranscription(file, sourceType, liveNotes);
+    async (
+      file: File,
+      sourceType: SermonSourceType,
+      liveNotes?: UserNote[],
+      speakerMeta?: SermonSpeakerMeta,
+    ) => {
+      await runTranscription(file, sourceType, liveNotes, speakerMeta);
     },
     [runTranscription],
   );
 
   /** Transcribe only (no study guide) — same as live/upload audio first step */
   const transcribeOnlyFile = useCallback(
-    async (file: File) => {
-      await runTranscription(file, 'upload');
+    async (file: File, speakerMeta?: SermonSpeakerMeta) => {
+      await runTranscription(file, 'upload', undefined, speakerMeta);
     },
     [runTranscription],
   );
 
   /** Upload path: optional single-shot without review */
   const processFileDirect = useCallback(
-    async (file: File, sourceType: SermonSourceType = 'upload') => {
+    async (
+      file: File,
+      sourceType: SermonSourceType = 'upload',
+      speakerMeta?: SermonSpeakerMeta,
+    ) => {
       const controller = beginProcessing();
       setIsLoading(true);
       setError(null);
@@ -261,9 +300,11 @@ export function useSermonProcessing({
           includeReflection,
           (status) => setProcessingStatus(status),
           controller.signal,
+          undefined,
+          speakerMeta,
         );
         result.audio_blob = file;
-        await saveResult(result, sourceType);
+        await saveResult(result, sourceType, undefined, file, speakerMeta);
       } catch (err) {
         handleError(err);
       } finally {
@@ -277,14 +318,14 @@ export function useSermonProcessing({
   const confirmTranscriptReview = useCallback(
     async (editedTranscript: string) => {
       if (!pendingReview) return;
-      const { file, liveNotes, sourceType } = pendingReview;
+      const { file, liveNotes, sourceType, speakerMeta } = pendingReview;
       const transcript = editedTranscript.trim();
       if (!transcript) {
         setError('Transcript is empty. Add text or start over.');
         return;
       }
       setPendingReview(null);
-      await runStudyGuide(transcript, sourceType, liveNotes, file);
+      await runStudyGuide(transcript, sourceType, liveNotes, file, speakerMeta);
     },
     [pendingReview, runStudyGuide, setError],
   );

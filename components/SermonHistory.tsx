@@ -2,7 +2,8 @@ import React from 'react';
 import { SermonHistoryItem } from '../types';
 import { Button } from './Button';
 import { PendingSyncBanner } from './PendingSyncBanner';
-import { BookOpen, ChevronRight, Trash2, Clock, BookMarked, Sparkles, Waves } from 'lucide-react';
+import { BookOpen, ChevronRight, Trash2, Clock, BookMarked, Sparkles, Waves, User } from 'lucide-react';
+import { formatSpeakerLabel } from '../lib/speakerMeta';
 
 interface SermonHistoryProps {
   history: SermonHistoryItem[];
@@ -22,7 +23,9 @@ export const SermonHistory: React.FC<SermonHistoryProps> = ({
 
   const filteredHistory = history.filter(item => 
     (item.summary.title || '').toLowerCase().includes(search.toLowerCase()) ||
-    (item.summary.main_topic || '').toLowerCase().includes(search.toLowerCase())
+    (item.summary.main_topic || '').toLowerCase().includes(search.toLowerCase()) ||
+    (item.summary.preacher_name || '').toLowerCase().includes(search.toLowerCase()) ||
+    (formatSpeakerLabel(item.summary) || '').toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -91,6 +94,12 @@ export const SermonHistory: React.FC<SermonHistoryProps> = ({
                   <h3 className="text-xl font-serif font-black text-indigo-950 truncate group-hover:text-indigo-700 transition-colors">
                     {item.summary.title || 'Untitled Sermon'}
                   </h3>
+                  {formatSpeakerLabel(item.summary) && (
+                    <p className="flex items-center gap-1.5 text-xs font-bold text-amber-700 mt-1 truncate">
+                      <User className="w-3 h-3 shrink-0" />
+                      {formatSpeakerLabel(item.summary)}
+                    </p>
+                  )}
                   <div className="flex flex-wrap items-center gap-y-1 text-xs font-bold text-indigo-900/30 uppercase tracking-widest mt-1.5">
                     <span className="flex items-center">
                        <Clock className="w-3.5 h-3.5 mr-1.5" />

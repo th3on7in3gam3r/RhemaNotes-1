@@ -51,6 +51,10 @@ export interface ChatMessage {
 export interface SermonSummaryOutput {
   title: string;
   main_topic: string;
+  /** Optional preacher / pastor name supplied by the user */
+  preacher_name?: string;
+  /** Optional title or role (Pastor, Rev., Bishop, etc.) */
+  speaker_title?: string;
   clean_transcript: string;
   scriptures: Scripture[];
   key_points: string[];

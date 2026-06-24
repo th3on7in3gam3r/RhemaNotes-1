@@ -11,7 +11,8 @@ import { processSermonTranscript, generateGuidedPrompts } from '../services/gemi
 import localforage from 'localforage';
 import { updateSermonInHistory, isScriptureSaved, toggleSavedScripture } from '../services/storageService';
 import { setPageMeta, buildSermonMeta } from '../services/seoService';
-import { BookOpen, RefreshCw, CheckCircle2, Copy, Sparkles, MessageSquare, Book, ChevronRight, Waves, Heart, FileText } from 'lucide-react';
+import { BookOpen, RefreshCw, CheckCircle2, Copy, Sparkles, MessageSquare, Book, ChevronRight, Waves, Heart, FileText, User } from 'lucide-react';
+import { formatSpeakerLabel } from '../lib/speakerMeta';
 import { SermonChat } from './SermonChat';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSubscription } from '../hooks/useSubscription';
@@ -266,6 +267,13 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
             <h2 className="text-4xl md:text-5xl font-serif font-black text-indigo-950 tracking-tight mb-4 leading-tight">
               {currentSummary.title || 'Sermon Illumination'}
             </h2>
+
+            {formatSpeakerLabel(currentSummary) && (
+              <p className="flex items-center gap-2 text-sm font-bold text-indigo-700 mb-4">
+                <User className="w-4 h-4 text-amber-500" />
+                <span>{formatSpeakerLabel(currentSummary)}</span>
+              </p>
+            )}
             
             <div className="flex flex-wrap items-center gap-6 text-indigo-900/50">
               <span className="flex items-center space-x-2 bg-indigo-50/50 px-4 py-2 rounded-2xl font-serif italic text-indigo-900">

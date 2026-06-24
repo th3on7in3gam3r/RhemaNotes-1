@@ -186,12 +186,13 @@ export async function processSermonTranscript(
   transcript: string,
   includeReflection: boolean,
   signal?: AbortSignal,
+  speaker?: { preacher_name?: string; speaker_title?: string },
 ): Promise<SermonSummaryOutput> {
   assertNotAborted(signal);
   const fullTranscript = transcript.trim();
   const forPrompt = trimTranscriptForStudyGuide(fullTranscript);
   const result = await callGemini(
-    [{ text: MASTER_SERMON_PROCESSING_PROMPT(forPrompt, includeReflection) }],
+    [{ text: MASTER_SERMON_PROCESSING_PROMPT(forPrompt, includeReflection, speaker) }],
     includeReflection,
     signal,
   );
@@ -322,6 +323,7 @@ export async function processSermonFile(
   onProgress?: GeminiProgressCallback,
   signal?: AbortSignal,
   existingTranscript?: string,
+  speaker?: { preacher_name?: string; speaker_title?: string },
 ): Promise<SermonSummaryOutput> {
   const transcript =
     existingTranscript?.trim() ||
@@ -329,7 +331,7 @@ export async function processSermonFile(
 
   assertNotAborted(signal);
   onProgress?.('Creating your study guide…');
-  const result = await processSermonTranscript(transcript, includeReflection, signal);
+  const result = await processSermonTranscript(transcript, includeReflection, signal, speaker);
   if (!result.clean_transcript?.trim()) {
     result.clean_transcript = transcript;
   }
