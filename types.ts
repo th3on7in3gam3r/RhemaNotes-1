@@ -71,6 +71,8 @@ export interface SermonSummaryOutput {
   mind_map?: MindMapNode;
   chat_history?: ChatMessage[];
   audio_blob?: Blob;
+  bible_highlights?: BibleHighlight[];
+  bible_annotations?: BibleAnnotation[];
 }
 
 export interface SavedScripture {

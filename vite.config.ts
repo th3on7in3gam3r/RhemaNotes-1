@@ -33,20 +33,27 @@ export default defineConfig(({ mode }) => {
           registerType: 'autoUpdate',
           includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
           workbox: {
-            // Never let the service worker intercept API calls or cache their responses.
-            // Without this, Workbox's default fetch handler can swallow POST/PATCH
-            // requests to /api/* and return stale cached responses.
+            // Do not precache index.html — stale shell → 404 on old hashed JS → blank page.
+            globPatterns: ['**/*.{js,css,ico,png,svg,woff2,webmanifest}'],
+            // Worker serves all routes; SW must not intercept navigations with cached HTML.
+            navigateFallback: null,
             navigateFallbackDenylist: [/^\/api\//],
-            // Activate the new SW immediately without waiting for all tabs to close.
-            // This ensures API-exclusion rules take effect right away on deploy.
             skipWaiting: true,
             clientsClaim: true,
             runtimeCaching: [
               {
-                // Cache static assets (JS, CSS, images) with StaleWhileRevalidate
+                urlPattern: ({ request }) => request.mode === 'navigate',
+                handler: 'NetworkFirst',
+                options: {
+                  cacheName: 'html-nav-v1',
+                  expiration: { maxEntries: 5, maxAgeSeconds: 60 * 60 },
+                  networkTimeoutSeconds: 5,
+                },
+              },
+              {
                 urlPattern: /\.(?:js|css|png|jpg|jpeg|svg|ico|woff2?)$/,
                 handler: 'StaleWhileRevalidate',
-                options: { cacheName: 'static-assets-v2' },
+                options: { cacheName: 'static-assets-v3' },
               },
             ],
           },

@@ -8,7 +8,8 @@ interface ClerkBootstrapProps {
 
 /** Loads Clerk publishable key from Worker-injected HTML or /api/public-config. */
 export const ClerkBootstrap: React.FC<ClerkBootstrapProps> = ({ children }) => {
-  const [publishableKey, setPublishableKey] = useState<string | undefined>();
+  const [ready, setReady] = useState(false);
+  const [publishableKey, setPublishableKey] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -19,7 +20,10 @@ export const ClerkBootstrap: React.FC<ClerkBootstrapProps> = ({ children }) => {
         await hydrateRuntimeConfig();
         key = getClerkPublishableKey();
       }
-      if (!cancelled) setPublishableKey(key);
+      if (!cancelled) {
+        setPublishableKey(key || '');
+        setReady(true);
+      }
     })();
 
     return () => {
@@ -27,7 +31,7 @@ export const ClerkBootstrap: React.FC<ClerkBootstrapProps> = ({ children }) => {
     };
   }, []);
 
-  if (publishableKey === undefined) {
+  if (!ready) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-indigo-50/30">
         <p className="text-sm font-bold text-indigo-400 animate-pulse">Loading…</p>

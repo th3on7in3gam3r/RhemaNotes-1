@@ -49,10 +49,10 @@ function colorClasses(color: HighlightColor) {
 // ── Storage helpers (stored inside summary to persist with history) ───────────
 
 function getHighlights(summary: SermonSummaryOutput): BibleHighlight[] {
-  return (summary as any).bible_highlights ?? [];
+  return summary.bible_highlights ?? [];
 }
 function getAnnotations(summary: SermonSummaryOutput): BibleAnnotation[] {
-  return (summary as any).bible_annotations ?? [];
+  return summary.bible_annotations ?? [];
 }
 
 // ── Verse Modal ───────────────────────────────────────────────────────────────

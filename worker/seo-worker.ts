@@ -33,6 +33,9 @@ import { syncUserTierFromStripe, tierFromPriceId, upsertUserTier } from './strip
 import { isFounderAccount } from './founder';
 import { submitWhisperTranscription, fetchWhisperTaskStatus } from './whisperTranscribe';
 import { resolveBibleVerse } from './bibleVerse';
+import { resolveSermonListUserId, requireAuthenticatedSermonWriter } from './sermonAccess';
+import { handleTranscriptionJobsRoute } from './transcriptionJobs';
+import { WHISPER_SERMON_PROMPT } from '../lib/transcriptionConstants';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -76,8 +79,10 @@ interface SermonKVEntry {
 
 // ── Worker entry point ────────────────────────────────────────────────────────
 
+const whisperCors = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' };
+
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
 
@@ -122,6 +127,23 @@ export default {
       return handleTranscribeSubmitAPI(request, env);
     }
 
+    if (path.startsWith('/api/transcribe/jobs')) {
+      if (!env.DB) {
+        return new Response(JSON.stringify({ error: 'Database not bound' }), {
+          status: 500,
+          headers: whisperCors,
+        });
+      }
+      const auth = await resolveAuth(request, env);
+      if (!auth.authenticated || !auth.userId) {
+        return new Response(JSON.stringify({ error: 'Sign in required for long-form transcription' }), {
+          status: 401,
+          headers: whisperCors,
+        });
+      }
+      return handleTranscriptionJobsRoute(request, { DB: env.DB, WHISPER_API_KEY: env.WHISPER_API_KEY, GEMINI_API_KEY: env.GEMINI_API_KEY }, auth.userId, path, ctx);
+    }
+
     const transcribeStatusMatch = path.match(/^\/api\/transcribe\/status\/([^/]+)$/);
     if (transcribeStatusMatch && request.method === 'GET') {
       return handleTranscribeStatusAPI(transcribeStatusMatch[1], request, env);
@@ -162,7 +184,7 @@ export default {
     const metaHTML = await resolveMetaHTML(path, env);
     const runtimeHTML = buildRuntimeConfigHTML(env);
 
-    return new HTMLRewriter()
+    const htmlResponse = new HTMLRewriter()
       .on('title', { element: (el) => { el.remove(); } })
       .on('meta', {
         element: (el) => {
@@ -175,6 +197,17 @@ export default {
       })
       .on('head', new MetaInjector(runtimeHTML + metaHTML))
       .transform(assetResponse);
+
+    const headers = new Headers(htmlResponse.headers);
+    headers.set('Content-Type', 'text/html; charset=utf-8');
+    headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    headers.set('Pragma', 'no-cache');
+
+    return new Response(htmlResponse.body, {
+      status: htmlResponse.status,
+      statusText: htmlResponse.statusText,
+      headers,
+    });
   },
 };
 
@@ -193,12 +226,15 @@ async function handleSermonsAPI(request: Request, env: Env): Promise<Response> {
   };
 
   try {
-    // GET /api/sermons — list only the requested user's sermons
+    // GET /api/sermons — list sermons for authenticated user or guest-only library
     if (request.method === 'GET' && !sermonId) {
-      const userId = url.searchParams.get('userId') || 'guest';
+      const auth = await resolveAuth(request, env);
+      const listAccess = resolveSermonListUserId(auth, url.searchParams.get('userId'));
+      if ('error' in listAccess) return listAccess.error;
+
       const { results } = await env.DB.prepare(
         'SELECT id, user_id, title, main_topic, clean_transcript, source_type, created_at, summary_json FROM sermons WHERE user_id = ? AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 100'
-      ).bind(userId).all();
+      ).bind(listAccess.userId).all();
       return new Response(JSON.stringify(results), { headers: cors });
     }
 
@@ -213,14 +249,16 @@ async function handleSermonsAPI(request: Request, env: Env): Promise<Response> {
       const sourceType = allowedSources.includes(sourceTypeRaw) ? sourceTypeRaw : 'text';
 
       await env.DB.prepare(
-        `INSERT INTO sermons (id, user_id, title, main_topic, clean_transcript, source_type, summary_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+        `INSERT INTO sermons (id, user_id, title, main_topic, clean_transcript, bible_reference, transcript_status, source_type, summary_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
       ).bind(
         id,
         userId,
         data.title || 'Untitled Sermon',
         data.main_topic || '',
         data.clean_transcript || '',
+        data.bible_reference || null,
+        data.transcript_status || 'complete',
         sourceType,
         data.summary_json || null
       ).run();
@@ -230,19 +268,15 @@ async function handleSermonsAPI(request: Request, env: Env): Promise<Response> {
     // DELETE /api/sermons/:id
     if (request.method === 'DELETE' && sermonId) {
       const auth = await resolveAuth(request, env);
-      const requestingUserId = auth.authenticated ? auth.userId : (request.headers.get('X-User-Id') || url.searchParams.get('userId') || 'guest');
+      const writer = requireAuthenticatedSermonWriter(auth);
+      if ('error' in writer) return writer.error;
+      const requestingUserId = writer.userId;
 
-      // Require a real user ID — never allow 'guest' to delete from D1
-      if (requestingUserId === 'guest') {
-        return new Response(JSON.stringify({ error: 'Sign in required to delete sermons' }), { status: 401, headers: cors });
-      }
-
-      const sermon = await env.DB.prepare('SELECT user_id FROM sermons WHERE id = ?').bind(sermonId).first() as any;
+      const sermon = await env.DB.prepare('SELECT user_id FROM sermons WHERE id = ?').bind(sermonId).first<{ user_id: string }>();
       
       if (!sermon) {
         return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: cors });
       }
-      // Allow delete if: owner matches, OR the sermon was a guest sermon being claimed
       if (sermon.user_id !== requestingUserId && sermon.user_id !== 'guest') {
         return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: cors });
       }
@@ -254,27 +288,42 @@ async function handleSermonsAPI(request: Request, env: Env): Promise<Response> {
     // PATCH /api/sermons/:id
     if (request.method === 'PATCH' && sermonId) {
       const auth = await resolveAuth(request, env);
-      const requestingUserId = auth.authenticated ? auth.userId : (request.headers.get('X-User-Id') || url.searchParams.get('userId') || 'guest');
-      const sermon = await env.DB.prepare('SELECT user_id FROM sermons WHERE id = ?').bind(sermonId).first() as any;
+      const writer = requireAuthenticatedSermonWriter(auth);
+      if ('error' in writer) return writer.error;
+      const requestingUserId = writer.userId;
+
+      const sermon = await env.DB.prepare('SELECT user_id FROM sermons WHERE id = ?').bind(sermonId).first<{ user_id: string }>();
       
       if (!sermon) {
         return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: cors });
       }
 
-      // Allow update if:
-      //   a) the requesting user is the creator, OR
-      //   b) the sermon was saved as 'guest' and a real user is now claiming it
-      //      (happens when a sermon is created before sign-in)
       const isOwner = sermon.user_id === requestingUserId;
-      const isGuestClaim = sermon.user_id === 'guest' && requestingUserId !== 'guest';
+      const isGuestClaim = sermon.user_id === 'guest';
       if (!isOwner && !isGuestClaim) {
-        return new Response(JSON.stringify({ error: 'Forbidden', stored: sermon.user_id, requesting: requestingUserId }), { status: 403, headers: cors });
+        return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: cors });
       }
 
-      const data: any = await request.json();
+      const data = (await request.json()) as {
+        title?: string;
+        main_topic?: string;
+        clean_transcript?: string;
+        bible_reference?: string | null;
+        transcript_status?: string;
+        summary_json?: string | null;
+      };
       await env.DB.prepare(
-        `UPDATE sermons SET user_id = ?, title = ?, main_topic = ?, clean_transcript = ?, summary_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
-      ).bind(requestingUserId, data.title, data.main_topic, data.clean_transcript, data.summary_json || null, sermonId).run();
+        `UPDATE sermons SET user_id = ?, title = ?, main_topic = ?, clean_transcript = ?, bible_reference = ?, transcript_status = ?, summary_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+      ).bind(
+        requestingUserId,
+        data.title,
+        data.main_topic,
+        data.clean_transcript,
+        data.bible_reference ?? null,
+        data.transcript_status || 'complete',
+        data.summary_json || null,
+        sermonId,
+      ).run();
       return new Response(JSON.stringify({ success: true }), { headers: cors });
     }
 
@@ -286,19 +335,34 @@ async function handleSermonsAPI(request: Request, env: Env): Promise<Response> {
 }
 
 async function handleCheckoutAPI(request: Request, env: Env): Promise<Response> {
+  const jsonHeaders = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' };
+
   try {
-    const { priceId, userId, userEmail } = await request.json() as any;
+    const auth = await resolveAuth(request, env);
+    if (!auth.authenticated) {
+      return new Response(JSON.stringify({ error: 'Sign in required to subscribe' }), {
+        status: 401,
+        headers: jsonHeaders,
+      });
+    }
+
+    const { priceId } = (await request.json()) as { priceId?: string };
+    if (!priceId) {
+      return new Response(JSON.stringify({ error: 'Missing priceId' }), { status: 400, headers: jsonHeaders });
+    }
     
     if (!env.STRIPE_SECRET_KEY) {
       return new Response(JSON.stringify({ error: 'Stripe secret key not configured' }), { 
         status: 500,
-        headers: { 'Content-Type': 'application/json' }
+        headers: jsonHeaders,
       });
     }
 
     const stripe = new Stripe(env.STRIPE_SECRET_KEY);
     const url = new URL(request.url);
     const origin = url.origin;
+    const userId = auth.userId;
+    const userEmail = auth.email || '';
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -307,17 +371,16 @@ async function handleCheckoutAPI(request: Request, env: Env): Promise<Response> 
       success_url: `${origin}/?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/pricing`,
       client_reference_id: userId,
-      customer_email: userEmail,
+      customer_email: userEmail || undefined,
       metadata: { userId, priceId },
     });
 
-    return new Response(JSON.stringify({ url: session.url }), {
-      headers: { 'Content-Type': 'application/json' }
-    });
-  } catch (err: any) {
-    return new Response(JSON.stringify({ error: err.message }), { 
+    return new Response(JSON.stringify({ url: session.url }), { headers: jsonHeaders });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Checkout failed';
+    return new Response(JSON.stringify({ error: message }), { 
       status: 500,
-      headers: { 'Content-Type': 'application/json' }
+      headers: jsonHeaders,
     });
   }
 }
@@ -455,7 +518,7 @@ async function handleSyncSubscriptionAPI(request: Request, env: Env): Promise<Re
 }
 
 const WHISPER_MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
-const whisperCors = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' };
+// ── Transcription API ────────────────────────────────────────────────────────
 
 async function handleTranscribeAvailableAPI(env: Env): Promise<Response> {
   return new Response(JSON.stringify({ available: Boolean(env.WHISPER_API_KEY) }), { headers: whisperCors });
@@ -481,6 +544,16 @@ async function handleBibleVerseAPI(request: Request, env: Env): Promise<Response
       status: 400,
       headers: whisperCors,
     });
+  }
+
+  const auth = await resolveAuth(request, env);
+  const rateKey = clientRateLimitKey(request, auth.userId);
+  const limit = checkRateLimit(`bible:${rateKey}`, 60, 60_000);
+  if (!limit.allowed) {
+    return new Response(
+      JSON.stringify({ error: 'Bible lookup rate limit exceeded', retryAfterSec: limit.retryAfterSec }),
+      { status: 429, headers: { ...whisperCors, 'Retry-After': String(limit.retryAfterSec ?? 60) } },
+    );
   }
 
   try {
@@ -540,7 +613,9 @@ async function handleTranscribeSubmitAPI(request: Request, env: Env): Promise<Re
   }
 
   try {
-    const result = await submitWhisperTranscription(env.WHISPER_API_KEY, fileBlob, fileName);
+    const result = await submitWhisperTranscription(env.WHISPER_API_KEY, fileBlob, fileName, {
+      prompt: WHISPER_SERMON_PROMPT,
+    });
     return new Response(JSON.stringify({ taskId: result.task_id, status: result.status }), { headers: whisperCors });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Whisper upload failed';
@@ -775,11 +850,29 @@ async function handleYouTubeTranscriptAPI(request: Request, env: Env): Promise<R
     return new Response(JSON.stringify({ error: 'Missing url parameter' }), { status: 400, headers: cors });
   }
 
+  const auth = await resolveAuth(request, env);
+  if (!auth.authenticated) {
+    return new Response(JSON.stringify({ error: 'Sign in required for YouTube import' }), { status: 401, headers: cors });
+  }
+  if (!isPaidTier(auth.tier)) {
+    return new Response(JSON.stringify({ error: 'YouTube import requires The Vine or The Harvest plan' }), { status: 403, headers: cors });
+  }
+
+  const rateKey = clientRateLimitKey(request, auth.userId);
+  const limit = checkRateLimit(`youtube:${rateKey}`, 20, 60_000);
+  if (!limit.allowed) {
+    return new Response(
+      JSON.stringify({ error: 'Rate limit exceeded', retryAfterSec: limit.retryAfterSec }),
+      { status: 429, headers: { ...cors, 'Retry-After': String(limit.retryAfterSec ?? 60) } },
+    );
+  }
+
   try {
     const result = await getYouTubeTranscript(targetUrl, false);
     return new Response(JSON.stringify(result), { headers: cors });
-  } catch (err: any) {
-    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: cors });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'YouTube transcript failed';
+    return new Response(JSON.stringify({ error: message }), { status: 500, headers: cors });
   }
 }
 

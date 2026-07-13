@@ -6,14 +6,13 @@ import {
   processSermonFile,
   transcribeSermonAudio,
   estimateTranscriptionMinutes,
-  estimateChunksFromFile,
 } from '../services/geminiService';
+import { shouldUseLongFormTranscription, estimateLongFormChunks } from '../services/audioChunker';
 import { saveSermonToHistory } from '../services/storageService';
 import { savePendingTranscript, clearPendingTranscript } from '../services/transcriptCache';
 import { saveLastRecording } from '../services/recordingStore';
 import { ensureAuthToken } from '../services/apiAuth';
 import { applySpeakerMeta, type SermonSpeakerMeta } from '../lib/speakerMeta';
-import { saveSpeakerPrefs } from '../services/speakerPrefs';
 import type { UserTier } from '../constants/features';
 import type { SermonSourceType } from '../types/source';
 import type { SermonHistoryItem, SermonSummaryOutput, UserNote } from '../types';
@@ -238,7 +237,9 @@ export function useSermonProcessing({
       setError(null);
       setPendingReview(null);
       try {
-        const chunks = estimateChunksFromFile(file);
+        const chunks = shouldUseLongFormTranscription(file)
+          ? estimateLongFormChunks(file)
+          : Math.max(1, Math.ceil(estimateRecordingMinutes(file) * 60 / 240));
         const tierLabel = tier === 'church' ? 'Harvest Church' : tier === 'pro' ? 'Vine' : '';
         const durationHint =
           chunks > 1

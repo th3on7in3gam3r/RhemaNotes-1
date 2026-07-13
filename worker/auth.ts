@@ -35,9 +35,7 @@ export async function resolveAuth(request: Request, env: AuthEnv): Promise<AuthR
   }
 
   if (!authenticated) {
-    const headerUser = request.headers.get('X-User-Id');
-    const queryUser = new URL(request.url).searchParams.get('userId');
-    userId = headerUser || queryUser || 'guest';
+    userId = 'guest';
   }
 
   let tier: AuthResult['tier'] = 'free';

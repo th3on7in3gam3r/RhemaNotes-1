@@ -14,6 +14,8 @@
  * endpoint allows cross-origin reads on its signed URLs.
  */
 
+import { authFetch } from './apiAuth';
+
 export interface YouTubeResult {
   title: string;
   transcript: string;
@@ -238,7 +240,7 @@ export async function getYouTubeTranscript(url: string, useBackendFirst = true):
   if (useBackendFirst && typeof window !== 'undefined') {
     try {
       const backendUrl = `/api/youtube-transcript?url=${encodeURIComponent(url)}`;
-      const res = await fetch(backendUrl);
+      const res = await authFetch(backendUrl);
       if (res.ok) {
         const data = (await res.json()) as any;
         if (data && data.transcript && data.title) {

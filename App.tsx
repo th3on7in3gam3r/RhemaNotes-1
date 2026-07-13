@@ -13,7 +13,7 @@ import { Onboarding } from './components/Onboarding';
 import { getSermonHistory, saveSermonToHistory, deleteSermonFromHistory, claimGuestSermons } from './services/storageService';
 import { getSavedScriptures } from './services/storageService';
 import { getYouTubeTranscript } from './services/youtubeService';
-import { setAuthTokenGetter } from './services/apiAuth';
+import { setAuthTokenGetter, authFetch } from './services/apiAuth';
 import { useSermonProcessing } from './hooks/useSermonProcessing';
 import type { SermonSpeakerMeta } from './lib/speakerMeta';
 import { ProcessingOverlay } from './components/ProcessingOverlay';
@@ -568,6 +568,7 @@ function App() {
             activeUserId={user?.id || 'guest'}
             creatorId={history.find(h => h.id === selectedHistoryId)?.user_id}
             onScripturesChange={() => setSavedScriptures(getSavedScriptures())}
+            onUpgrade={() => setCurrentScreen('pricing')}
           />
 
         ) : (
@@ -606,26 +607,21 @@ function App() {
               }
 
               try {
-                const response = await fetch('/api/checkout', {
+                const response = await authFetch('/api/checkout', {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    priceId: stripePriceId,
-                    userId: user?.id || 'guest',
-                    userEmail: user?.primaryEmailAddress?.emailAddress || '',
-                  }),
+                  body: JSON.stringify({ priceId: stripePriceId }),
                 });
 
-                const data = await response.json() as any;
+                const data = (await response.json()) as { url?: string; error?: string };
                 if (data.url) {
                   window.location.href = data.url;
                 } else {
                   throw new Error(data.error || 'Failed to create checkout session');
                 }
-              } catch (err: any) {
+              } catch (err: unknown) {
+                const message = err instanceof Error ? err.message : 'Payment system currently unavailable.';
                 console.error('Checkout error:', err);
-                alert('Checkout Error: ' + (err.message || 'Unknown error'));
-                setError(err.message || 'Payment system currently unavailable. Please try again later.');
+                setError(message);
               }
             }}
           />

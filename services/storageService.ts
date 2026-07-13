@@ -297,7 +297,9 @@ export const getSermonHistory = async (userId: string = 'guest'): Promise<Sermon
         if (s.summary_json) {
           try {
             parsedCloudSummary = JSON.parse(s.summary_json);
-          } catch {}
+          } catch (parseErr) {
+            console.warn('Failed to parse summary_json for sermon', s.id, parseErr);
+          }
         }
 
         if (localMap.has(s.id)) {

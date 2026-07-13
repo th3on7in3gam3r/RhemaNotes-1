@@ -5,6 +5,9 @@ CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     email TEXT UNIQUE NOT NULL,
     display_name TEXT,
+    tier TEXT NOT NULL DEFAULT 'free',
+    stripe_customer_id TEXT,
+    stripe_subscription_id TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     deleted_at DATETIME
@@ -21,6 +24,8 @@ CREATE TABLE IF NOT EXISTS sermons (
     source_url TEXT,
     audio_key TEXT,
     clean_transcript TEXT,
+    bible_reference TEXT,
+    transcript_status TEXT DEFAULT 'pending' CHECK(transcript_status IN ('pending', 'processing', 'complete', 'failed')),
     main_topic TEXT,
     is_public INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -88,3 +93,27 @@ CREATE TRIGGER IF NOT EXISTS sermons_au AFTER UPDATE ON sermons BEGIN
   INSERT INTO sermons_fts(sermons_fts, rowid, id, title, clean_transcript) VALUES('delete', old.rowid, old.id, old.title, old.clean_transcript);
   INSERT INTO sermons_fts(rowid, id, title, clean_transcript) VALUES (new.rowid, new.id, new.title, new.clean_transcript);
 END;
+
+-- Long-form transcription jobs (chunked Whisper pipeline)
+CREATE TABLE IF NOT EXISTS transcription_jobs (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    sermon_id TEXT,
+    file_name TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending'
+      CHECK(status IN ('pending', 'processing', 'complete', 'failed')),
+    total_chunks INTEGER NOT NULL DEFAULT 0,
+    completed_chunks INTEGER NOT NULL DEFAULT 0,
+    chunk_transcripts_json TEXT,
+    raw_transcript TEXT,
+    cleaned_transcript TEXT,
+    sermon_title TEXT,
+    bible_reference TEXT,
+    formatted_transcript TEXT,
+    error TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_transcription_jobs_user ON transcription_jobs(user_id);
+CREATE INDEX IF NOT EXISTS idx_transcription_jobs_status ON transcription_jobs(status);

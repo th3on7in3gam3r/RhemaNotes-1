@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "test:gemini": "node scripts/test-gemini.mjs",
     "lint": "eslint . --ext .ts,.tsx --max-warnings 0",
+    "typecheck": "tsc --noEmit",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\""
   },
   "dependencies": {

@@ -48,7 +48,7 @@ export const ProcessingOverlay: React.FC<ProcessingOverlayProps> = ({
 
       <h2 className="text-3xl font-serif font-black text-amber-50 mb-2 tracking-tight">Processing Sermon</h2>
       <p className="text-amber-200/50 text-sm font-serif italic mb-6 max-w-md text-center px-6">
-        Like a voice memo: we transcribe your recording to text, then build your study guide. Long sermons can take 15–20 minutes.
+        Long sermons (30+ min) are split into 10-minute parts for accurate transcription. You can keep this tab open to watch progress.
       </p>
 
       <div className="min-h-[2rem] overflow-hidden text-center max-w-lg px-6">

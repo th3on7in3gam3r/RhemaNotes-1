@@ -52,7 +52,7 @@ export const NotesTab: React.FC<NotesTabProps> = ({ summary, onUpdateSummary, on
   const deleteAction = (id: string) =>
     save({ ...summary, personal_action_items: (summary.personal_action_items || []).filter(a => a.id !== id) });
 
-  const bibleHighlights = (summary as any).bible_highlights ?? [];
+  const bibleHighlights = summary.bible_highlights ?? [];
 
   return (
     <div className="p-6 md:p-8 relative">

@@ -10,6 +10,10 @@ import {
 } from '../constants/ai';
 import { savePartialTranscript, clearPartialTranscript } from './transcriptCache';
 import { transcribeWithWhisper, WhisperUnavailableError } from './whisperTranscriptionService';
+import {
+  transcribeLongFormSermon,
+  shouldUseLongFormTranscription,
+} from './longFormTranscriptionService';
 import { SermonSummaryOutput } from '../types';
 import { authFetch } from './apiAuth';
 
@@ -218,6 +222,27 @@ export async function transcribeSermonAudio(
   signal?: AbortSignal,
 ): Promise<string> {
   assertNotAborted(signal);
+
+  if (shouldUseLongFormTranscription(file)) {
+    try {
+      onProgress?.('Long sermon detected — using chunked Whisper transcription (10 min segments)…');
+      const longFormText = await transcribeLongFormSermon(file, onProgress, signal);
+      await clearPartialTranscript();
+      if (!longFormText.trim()) throw new Error('Transcription produced no text.');
+      return longFormText;
+    } catch (err) {
+      if (err instanceof WhisperUnavailableError) {
+        onProgress?.('Chunked Whisper unavailable — using built-in transcription (keep tab open)…');
+        return transcribeSermonAudioWithGemini(file, onProgress, signal);
+      }
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('Sign in required')) {
+        onProgress?.('Sign in required for long-form Whisper — using built-in transcription…');
+        return transcribeSermonAudioWithGemini(file, onProgress, signal);
+      }
+      throw err;
+    }
+  }
 
   try {
     onProgress?.('Sending audio to Whisper for transcription…');

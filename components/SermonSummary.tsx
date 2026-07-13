@@ -31,11 +31,12 @@ interface SermonSummaryProps {
   activeUserId?: string;
   creatorId?: string;
   onScripturesChange?: () => void;
+  onUpgrade?: () => void;
 }
 
 export const SermonSummary: React.FC<SermonSummaryProps> = ({
   summary, onGoHome, includeReflection, onToggleReflection, isLoading, historyId, onUpdateHistory,
-  activeUserId, creatorId, onScripturesChange,
+  activeUserId, creatorId, onScripturesChange, onUpgrade,
 }) => {
   const [sidebarView, setSidebarView] = useState<'chat' | 'bible'>('chat');
   const [currentSummary, setCurrentSummary] = useState<SermonSummaryOutput>(summary);
@@ -308,7 +309,7 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {[
               { id: 'notes', label: 'Structured Notes', desc: 'Divine breakdown and key truths' },
-              { id: 'apply', label: 'Spiritual Application', desc: 'Walking the word in daily life' },
+              { id: 'apply', label: 'My Notes & Actions', desc: 'Personal notes, highlights, and to-dos' },
               { id: 'study', label: 'Illumination Tools', desc: 'Quizzes, Flashcards & Vision Map' },
               { id: 'transcript', label: 'Full Scroll', desc: 'The complete spoken word' },
             ].map(res => (
@@ -316,9 +317,8 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
                 key={res.id} 
                 onClick={() => {
                   if ((res.id === 'study' || res.id === 'chat') && !isPro) {
-                    // Navigate to pricing if they click a locked feature
-                    // In a more complex app, we'd pass a navigation prop
-                    return; 
+                    onUpgrade?.();
+                    return;
                   }
                   setActiveResource(activeResource === res.id ? null : res.id as any);
                 }}
