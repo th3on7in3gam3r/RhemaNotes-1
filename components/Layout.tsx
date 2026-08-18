@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { History, Home, BookOpen, Moon, Sun, Sparkles, MessageCircle, PenLine, User } from 'lucide-react';
+import { History, Home, BookOpen, Moon, Sun, Sparkles, MessageCircle, User, Globe } from 'lucide-react';
 import { AuthNav } from './AuthNav';
 import logoImg from '../logo.png';
 
@@ -121,6 +121,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
           <nav className="hidden md:flex items-center bg-white/50 p-1.5 rounded-[20px] border border-indigo-50/50 shadow-sm">
             {navBtn('home',    'Home',    Home)}
             {navBtn('history', 'Library', History)}
+            {navBtn('community', 'Community', Globe)}
             {/* Show Upgrade only for free users; paid users see their tier in Dashboard */}
             {tier === 'free' && navBtn('pricing', 'Upgrade', Sparkles)}
 
@@ -178,9 +179,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentScr
             </button>
             <span className="text-[9.5px] font-black uppercase tracking-widest text-indigo-950 mt-1">Scribe</span>
           </div>
-          {tier === 'free' ? mobileNavBtn('pricing', 'Upgrade', Sparkles) : (
-            mobileNavBtn('summary', 'Notes', PenLine)
-          )}
+          {mobileNavBtn('community', 'Community', Globe)}
           {mobileNavBtn('profile', 'Dashboard', User)}
         </nav>
       </div>

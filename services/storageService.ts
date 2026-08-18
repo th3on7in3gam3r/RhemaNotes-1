@@ -1,5 +1,5 @@
 import localforage from 'localforage';
-import { SermonHistoryItem, SermonSummaryOutput, UserNote, SavedScripture } from '../types';
+import { SermonHistoryItem, SermonSummaryOutput, UserNote, SavedScripture, CommunityPost } from '../types';
 import type { SermonSourceType } from '../types/source';
 import { authFetch } from './apiAuth';
 
@@ -316,15 +316,18 @@ export const getSermonHistory = async (userId: string = 'guest'): Promise<Sermon
               ? parsedCloudSummary
               : localItem.summary;
 
+          const isPublic = Boolean(s.is_public);
           return {
             ...localItem,
             timestamp: new Date(s.created_at).getTime(),
             user_id: s.user_id,
+            is_public: isPublic,
             summary: {
               ...mergedSummary,
               title: s.title || mergedSummary.title,
               main_topic: s.main_topic || mergedSummary.main_topic,
               clean_transcript: s.clean_transcript || mergedSummary.clean_transcript,
+              is_public: isPublic,
             },
           };
         }
@@ -343,11 +346,13 @@ export const getSermonHistory = async (userId: string = 'guest'): Promise<Sermon
           actionable_insights: [],
         };
 
+        const isPublic = Boolean(s.is_public);
         return {
           id: s.id,
           timestamp: new Date(s.created_at).getTime(),
           user_id: s.user_id,
-          summary: parsedSummary,
+          is_public: isPublic,
+          summary: { ...parsedSummary, is_public: isPublic },
         };
       });
 
@@ -441,6 +446,55 @@ export const updateSermonInHistory = async (
     console.warn('D1 PATCH network error.', e);
     return false;
   }
+};
+
+const stampLocalPublicFlag = async (id: string, isPublic: boolean): Promise<void> => {
+  const history = await localforage.getItem<SermonHistoryItem[]>(STORAGE_KEY) || [];
+  await localforage.setItem(
+    STORAGE_KEY,
+    history.map((item) =>
+      item.id === id
+        ? { ...item, is_public: isPublic, summary: { ...item.summary, is_public: isPublic } }
+        : item
+    ),
+  );
+};
+
+export const publishSermonToCommunity = async (id: string): Promise<void> => {
+  const res = await authFetch(`${API_BASE}/${id}/publish`, { method: 'POST' });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((body as { error?: string }).error || `Publish failed (${res.status})`);
+  }
+  await stampLocalPublicFlag(id, true);
+};
+
+export const unpublishSermon = async (id: string): Promise<void> => {
+  const res = await authFetch(`${API_BASE}/${id}/publish`, { method: 'DELETE' });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((body as { error?: string }).error || `Unpublish failed (${res.status})`);
+  }
+  await stampLocalPublicFlag(id, false);
+};
+
+export const getCommunityFeed = async (): Promise<CommunityPost[]> => {
+  const res = await authFetch(`/api/community?t=${Date.now()}`, {
+    headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
+  });
+  if (!res.ok) {
+    throw new Error('Could not load the Community Library.');
+  }
+  return res.json();
+};
+
+export const getCommunityPost = async (id: string): Promise<CommunityPost> => {
+  const res = await authFetch(`/api/community/${id}?t=${Date.now()}`, {
+    headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
+  });
+  if (res.status === 404) throw new Error('This summary is no longer public.');
+  if (!res.ok) throw new Error('Could not load this community summary.');
+  return res.json();
 };
 
 // ── Live Drafts (Local Only) ──────────────────────────────────────────────────

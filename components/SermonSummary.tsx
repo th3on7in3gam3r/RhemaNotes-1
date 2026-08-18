@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { SermonSummaryOutput } from '../types';
+import { SermonSummaryOutput, HeroImage } from '../types';
 import { Button } from './Button';
 import { TranscriptTab } from './TranscriptTab';
 import { ApplyTab } from './ApplyTab';
@@ -9,14 +9,14 @@ import { BibleTab } from './BibleTab';
 import { ScriptureSaveButton } from './ScriptureSaveButton';
 import { processSermonTranscript, generateGuidedPrompts } from '../services/geminiService';
 import localforage from 'localforage';
-import { updateSermonInHistory, isScriptureSaved, toggleSavedScripture } from '../services/storageService';
+import { updateSermonInHistory, isScriptureSaved, toggleSavedScripture, publishSermonToCommunity, unpublishSermon } from '../services/storageService';
 import { setPageMeta, buildSermonMeta } from '../services/seoService';
-import { BookOpen, RefreshCw, CheckCircle2, Copy, Sparkles, MessageSquare, Book, ChevronRight, Waves, Heart, FileText, User } from 'lucide-react';
+import { BookOpen, RefreshCw, CheckCircle2, Copy, Sparkles, MessageSquare, Book, ChevronRight, Waves, Heart, FileText, User, Globe, Lock } from 'lucide-react';
 import { formatSpeakerLabel } from '../lib/speakerMeta';
 import { SermonChat } from './SermonChat';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSubscription } from '../hooks/useSubscription';
-import { Lock } from 'lucide-react';
+import { HeroImageEditor } from './HeroImage';
 
 interface SermonSummaryProps {
   summary: SermonSummaryOutput;
@@ -32,11 +32,12 @@ interface SermonSummaryProps {
   creatorId?: string;
   onScripturesChange?: () => void;
   onUpgrade?: () => void;
+  onPublishStateChange?: (isPublic: boolean) => void;
 }
 
 export const SermonSummary: React.FC<SermonSummaryProps> = ({
   summary, onGoHome, includeReflection, onToggleReflection, isLoading, historyId, onUpdateHistory,
-  activeUserId, creatorId, onScripturesChange, onUpgrade,
+  activeUserId, creatorId, onScripturesChange, onUpgrade, onPublishStateChange,
 }) => {
   const [sidebarView, setSidebarView] = useState<'chat' | 'bible'>('chat');
   const [currentSummary, setCurrentSummary] = useState<SermonSummaryOutput>(summary);
@@ -229,6 +230,8 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
         ...updated,
         user_notes: currentSummary.user_notes,
         personal_action_items: currentSummary.personal_action_items,
+        hero_image: currentSummary.hero_image,
+        is_public: currentSummary.is_public,
       });
     } catch (err: any) {
       setReflectionError(err.message || 'Failed to update reflection.');
@@ -239,6 +242,44 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
   }, [currentSummary, includeReflection, onToggleReflection, handleUpdateSummarization]);
 
   const [activeResource, setActiveResource] = useState<'transcript' | 'notes' | 'study' | 'apply' | null>('notes');
+  const [publishBusy, setPublishBusy] = useState(false);
+
+  const handleHeroImageChange = useCallback((hero: HeroImage | undefined) => {
+    const updated: SermonSummaryOutput = { ...currentSummary };
+    if (hero) updated.hero_image = hero;
+    else delete updated.hero_image;
+    handleUpdateSummarization(updated);
+  }, [currentSummary, handleUpdateSummarization]);
+
+  const handlePublishToggle = useCallback(async () => {
+    if (!historyId || !isCreator || !activeUserId || activeUserId === 'guest') {
+      alert('Please sign in to publish to the Community Library.');
+      return;
+    }
+    const currentlyPublic = Boolean(currentSummary.is_public);
+    if (!currentlyPublic) {
+      const ok = window.confirm(
+        'Publish this Summary to the Community Library?\n\nOnly the Summary will be shared. Prayer, reflection questions, and your personal notes stay private.',
+      );
+      if (!ok) return;
+    }
+    setPublishBusy(true);
+    try {
+      if (currentlyPublic) {
+        await unpublishSermon(historyId);
+      } else {
+        await publishSermonToCommunity(historyId);
+      }
+      const updated = { ...currentSummary, is_public: !currentlyPublic };
+      setCurrentSummary(updated);
+      onUpdateHistory?.(updated);
+      onPublishStateChange?.(!currentlyPublic);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not update publish status.');
+    } finally {
+      setPublishBusy(false);
+    }
+  }, [historyId, isCreator, activeUserId, currentSummary, onUpdateHistory, onPublishStateChange]);
 
   const renderResourceContent = () => {
     switch (activeResource) {
@@ -296,6 +337,14 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
           {/* Decorative halo */}
           <div className="absolute -right-20 -bottom-20 w-80 h-80 bg-indigo-100/30 rounded-full blur-[100px] pointer-events-none" />
         </div>
+
+        {isCreator && (
+          <HeroImageEditor
+            image={currentSummary.hero_image}
+            disabled={!historyId}
+            onChange={handleHeroImageChange}
+          />
+        )}
 
         {renderScriptureFoundation()}
 
@@ -504,16 +553,42 @@ export const SermonSummary: React.FC<SermonSummaryProps> = ({
 
         {/* Share & Preserve Section */}
         <div className="sacred-card p-10 border border-indigo-50 bg-indigo-50/10">
-          <h3 className="text-xl font-serif font-black text-indigo-950 mb-6">Preserve & Share</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <h3 className="text-xl font-serif font-black text-indigo-950 mb-2">Preserve & Share</h3>
+          <p className="text-sm text-indigo-900/50 font-serif italic mb-6">
+            Publishing shares the Summary only. Your Plan (prayer, reflection questions, notes) stays private.
+          </p>
+
+          <button
+            type="button"
+            onClick={handlePublishToggle}
+            disabled={publishBusy || !isCreator || !historyId}
+            className={`w-full mb-6 flex items-center justify-center gap-3 py-4 rounded-2xl font-black uppercase tracking-widest text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+              currentSummary.is_public
+                ? 'bg-white border border-indigo-200 text-indigo-800 hover:border-rose-200'
+                : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-200'
+            }`}
+          >
+            {currentSummary.is_public ? <Lock className="w-5 h-5" /> : <Globe className="w-5 h-5" />}
+            {publishBusy
+              ? 'Updating…'
+              : currentSummary.is_public
+                ? 'Unpublish from Community Library'
+                : 'Publish to Community Library'}
+          </button>
+          {currentSummary.is_public && (
+            <p className="text-center text-xs font-bold text-emerald-700 uppercase tracking-widest mb-6">
+              Live in Community Library — Summary only
+            </p>
+          )}
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {[
-              { label: 'PDF Export', icon: FileText, color: 'indigo' },
-              { label: 'Share Link', icon: MessageSquare, color: 'indigo' },
-              { label: 'Instagram Story', icon: Sparkles, color: 'rose' },
-              { label: 'Church Group', icon: Waves, color: 'indigo' },
+              { label: 'PDF Export', icon: FileText },
+              { label: 'Share Link', icon: MessageSquare },
+              { label: 'Instagram Story', icon: Sparkles },
             ].map((action, i) => (
-              <button key={i} className="flex flex-col items-center justify-center p-4 rounded-2xl bg-white border border-indigo-50 hover:border-amber-200 hover:-translate-y-1 transition-all group">
-                <div className={`w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center mb-3 group-hover:bg-indigo-900 transition-colors`}>
+              <button key={i} type="button" className="flex flex-col items-center justify-center p-4 rounded-2xl bg-white border border-indigo-50 hover:border-amber-200 hover:-translate-y-1 transition-all group">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center mb-3 group-hover:bg-indigo-900 transition-colors">
                   <action.icon className="w-5 h-5 text-indigo-400 group-hover:text-white" />
                 </div>
                 <span className="text-[10px] font-black uppercase tracking-widest text-indigo-950/60 group-hover:text-indigo-950">

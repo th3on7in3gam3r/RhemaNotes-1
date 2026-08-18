@@ -36,6 +36,7 @@ import { resolveBibleVerse } from './bibleVerse';
 import { resolveSermonListUserId, requireAuthenticatedSermonWriter } from './sermonAccess';
 import { handleTranscriptionJobsRoute } from './transcriptionJobs';
 import { WHISPER_SERMON_PROMPT } from '../lib/transcriptionConstants';
+import { parsePublicSummaryJson } from '../lib/publicSummary';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -93,6 +94,10 @@ export default {
 
     if (path.startsWith('/api/sermons')) {
       return handleSermonsAPI(request, env);
+    }
+
+    if (path.startsWith('/api/community')) {
+      return handleCommunityAPI(request, env);
     }
 
     if (path === '/api/checkout' && request.method === 'POST') {
@@ -217,8 +222,9 @@ async function handleSermonsAPI(request: Request, env: Env): Promise<Response> {
   if (!env.DB) return new Response('Database not bound', { status: 500 });
 
   const url = new URL(request.url);
-  // Extract optional sermon ID from path e.g. /api/sermons/abc-123
-  const sermonId = url.pathname.replace('/api/sermons', '').replace(/^\//, '') || null;
+  // Remainder after /api/sermons — '' | ':id' | ':id/publish'
+  const rest = url.pathname.replace('/api/sermons', '').replace(/^\//, '');
+  const [sermonId, action] = rest ? rest.split('/') : [null, undefined];
 
   const cors = {
     'Access-Control-Allow-Origin': '*',
@@ -233,13 +239,38 @@ async function handleSermonsAPI(request: Request, env: Env): Promise<Response> {
       if ('error' in listAccess) return listAccess.error;
 
       const { results } = await env.DB.prepare(
-        'SELECT id, user_id, title, main_topic, clean_transcript, source_type, created_at, summary_json FROM sermons WHERE user_id = ? AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 100'
+        'SELECT id, user_id, title, main_topic, clean_transcript, source_type, created_at, summary_json, is_public FROM sermons WHERE user_id = ? AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 100'
       ).bind(listAccess.userId).all();
       return new Response(JSON.stringify(results), { headers: cors });
     }
 
+    // POST /api/sermons/:id/publish — share Summary only (Plan stays in summary_json)
+    if (sermonId && action === 'publish' && (request.method === 'POST' || request.method === 'DELETE')) {
+      const auth = await resolveAuth(request, env);
+      const writer = requireAuthenticatedSermonWriter(auth);
+      if ('error' in writer) return writer.error;
+
+      const sermon = await env.DB.prepare(
+        'SELECT user_id FROM sermons WHERE id = ? AND deleted_at IS NULL'
+      ).bind(sermonId).first<{ user_id: string }>();
+
+      if (!sermon) {
+        return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: cors });
+      }
+      if (sermon.user_id !== writer.userId) {
+        return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: cors });
+      }
+
+      const makePublic = request.method === 'POST' ? 1 : 0;
+      await env.DB.prepare(
+        'UPDATE sermons SET is_public = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+      ).bind(makePublic, sermonId).run();
+
+      return new Response(JSON.stringify({ success: true, is_public: makePublic === 1 }), { headers: cors });
+    }
+
     // POST /api/sermons — create a sermon
-    if (request.method === 'POST') {
+    if (request.method === 'POST' && !sermonId) {
       const auth = await resolveAuth(request, env);
       const data: { user_id?: string; [key: string]: unknown } = await request.json();
       const id = (data.id as string) || crypto.randomUUID();
@@ -266,7 +297,7 @@ async function handleSermonsAPI(request: Request, env: Env): Promise<Response> {
     }
 
     // DELETE /api/sermons/:id
-    if (request.method === 'DELETE' && sermonId) {
+    if (request.method === 'DELETE' && sermonId && !action) {
       const auth = await resolveAuth(request, env);
       const writer = requireAuthenticatedSermonWriter(auth);
       if ('error' in writer) return writer.error;
@@ -286,7 +317,7 @@ async function handleSermonsAPI(request: Request, env: Env): Promise<Response> {
     }
 
     // PATCH /api/sermons/:id
-    if (request.method === 'PATCH' && sermonId) {
+    if (request.method === 'PATCH' && sermonId && !action) {
       const auth = await resolveAuth(request, env);
       const writer = requireAuthenticatedSermonWriter(auth);
       if ('error' in writer) return writer.error;
@@ -332,6 +363,61 @@ async function handleSermonsAPI(request: Request, env: Env): Promise<Response> {
   }
 
   return new Response('Method not allowed', { status: 405 });
+}
+
+async function handleCommunityAPI(request: Request, env: Env): Promise<Response> {
+  if (!env.DB) return new Response('Database not bound', { status: 500 });
+
+  const cors = {
+    'Access-Control-Allow-Origin': '*',
+    'Content-Type': 'application/json',
+  };
+
+  if (request.method !== 'GET') {
+    return new Response('Method not allowed', { status: 405, headers: cors });
+  }
+
+  const rest = new URL(request.url).pathname.replace('/api/community', '').replace(/^\//, '');
+  const postId = rest || null;
+
+  try {
+    if (!postId) {
+      const { results } = await env.DB.prepare(
+        `SELECT id, title, created_at, summary_json
+         FROM sermons
+         WHERE is_public = 1 AND deleted_at IS NULL
+         ORDER BY updated_at DESC
+         LIMIT 100`
+      ).all<{ id: string; title: string; created_at: string; summary_json: string | null }>();
+
+      const posts = (results || []).map((row) => ({
+        id: row.id,
+        title: row.title,
+        created_at: row.created_at,
+        summary: parsePublicSummaryJson(row.summary_json),
+      }));
+      return new Response(JSON.stringify(posts), { headers: cors });
+    }
+
+    const row = await env.DB.prepare(
+      `SELECT id, title, created_at, summary_json
+       FROM sermons
+       WHERE id = ? AND is_public = 1 AND deleted_at IS NULL`
+    ).bind(postId).first<{ id: string; title: string; created_at: string; summary_json: string | null }>();
+
+    if (!row) {
+      return new Response(JSON.stringify({ error: 'Not Found' }), { status: 404, headers: cors });
+    }
+
+    return new Response(JSON.stringify({
+      id: row.id,
+      title: row.title,
+      created_at: row.created_at,
+      summary: parsePublicSummaryJson(row.summary_json),
+    }), { headers: cors });
+  } catch (err: any) {
+    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: cors });
+  }
 }
 
 async function handleCheckoutAPI(request: Request, env: Env): Promise<Response> {

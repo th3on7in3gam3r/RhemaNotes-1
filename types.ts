@@ -48,6 +48,13 @@ export interface ChatMessage {
   timestamp: number;
 }
 
+export type ImagePlacement = 'top' | 'left' | 'right';
+
+export interface HeroImage {
+  dataUrl: string;
+  placement: ImagePlacement;
+}
+
 export interface SermonSummaryOutput {
   title: string;
   main_topic: string;
@@ -73,6 +80,8 @@ export interface SermonSummaryOutput {
   audio_blob?: Blob;
   bible_highlights?: BibleHighlight[];
   bible_annotations?: BibleAnnotation[];
+  hero_image?: HeroImage;
+  is_public?: boolean;
 }
 
 export interface SavedScripture {
@@ -90,6 +99,27 @@ export interface SermonHistoryItem {
   timestamp: number;
   summary: SermonSummaryOutput;
   user_id?: string;
+  is_public?: boolean;
+}
+
+/** Redacted payload shown in the Community Library — never includes the Plan. */
+export interface PublicSummary {
+  title: string;
+  main_topic: string;
+  preacher_name?: string;
+  speaker_title?: string;
+  scriptures: Scripture[];
+  key_points: string[];
+  quotes: string[];
+  applications: string[];
+  hero_image?: HeroImage;
+}
+
+export interface CommunityPost {
+  id: string;
+  title: string;
+  created_at: string;
+  summary: PublicSummary;
 }
 
 export interface TabProps {

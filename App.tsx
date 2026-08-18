@@ -4,13 +4,14 @@ import { Button } from './components/Button';
 import { AudioRecorder } from './components/AudioRecorder';
 import { SermonSummary } from './components/SermonSummary';
 import { SermonHistory } from './components/SermonHistory';
+import { CommunityLibrary } from './components/CommunityLibrary';
 import { Pricing } from './components/Pricing';
 import { PaymentSuccess } from './components/PaymentSuccess';
 import { TermsOfService, PrivacyPolicy } from './components/LegalPages';
 import { UserProfile } from './components/UserProfile';
 import { useSubscription } from './hooks/useSubscription';
 import { Onboarding } from './components/Onboarding';
-import { getSermonHistory, saveSermonToHistory, deleteSermonFromHistory, claimGuestSermons } from './services/storageService';
+import { getSermonHistory, saveSermonToHistory, deleteSermonFromHistory, claimGuestSermons, publishSermonToCommunity, unpublishSermon } from './services/storageService';
 import { getSavedScriptures } from './services/storageService';
 import { getYouTubeTranscript } from './services/youtubeService';
 import { setAuthTokenGetter, authFetch } from './services/apiAuth';
@@ -38,7 +39,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useUser, useAuth } from '@clerk/react';
 import logoImg from './logo.png';
 
-type AppScreen = 'home' | 'listening' | 'summary' | 'upload' | 'history' | 'youtube' | 'pricing' | 'success' | 'terms' | 'privacy' | 'profile';
+type AppScreen = 'home' | 'listening' | 'summary' | 'upload' | 'history' | 'youtube' | 'pricing' | 'success' | 'terms' | 'privacy' | 'profile' | 'community';
 
 // ── Home screen input card ────────────────────────────────────────────────────
 
@@ -268,16 +269,38 @@ function App() {
    */
   const handleUpdateHistory = useCallback((updatedSummary?: SermonSummaryOutput) => {
     if (!updatedSummary) return;
-    // Update sermonOutput regardless — the summary is the source of truth
     setSermonOutput(updatedSummary);
-    // Update the matching history entry if we can find it
     setHistory(prev =>
-      prev.map(h => h.summary.title === updatedSummary.title && selectedHistoryId
-        ? h.id === selectedHistoryId ? { ...h, summary: updatedSummary } : h
-        : h
+      prev.map(h =>
+        h.id === selectedHistoryId
+          ? { ...h, summary: updatedSummary, is_public: Boolean(updatedSummary.is_public) }
+          : h
       )
     );
   }, [selectedHistoryId]);
+
+  const setItemPublic = useCallback((id: string, isPublic: boolean) => {
+    setHistory(prev =>
+      prev.map(h =>
+        h.id === id
+          ? { ...h, is_public: isPublic, summary: { ...h.summary, is_public: isPublic } }
+          : h
+      )
+    );
+    if (selectedHistoryId === id) {
+      setSermonOutput(prev => (prev ? { ...prev, is_public: isPublic } : prev));
+    }
+  }, [selectedHistoryId]);
+
+  const handlePublishItem = useCallback(async (id: string) => {
+    await publishSermonToCommunity(id);
+    setItemPublic(id, true);
+  }, [setItemPublic]);
+
+  const handleUnpublishItem = useCallback(async (id: string) => {
+    await unpublishSermon(id);
+    setItemPublic(id, false);
+  }, [setItemPublic]);
 
   const handleDeleteItem = async (id: string) => {
     const activeUserId = user?.id || 'guest';
@@ -551,6 +574,8 @@ function App() {
             onGoHome={handleGoHome}
             onLoadDemo={handleLoadDemo}
             activeUserId={user?.id || 'guest'}
+            onPublishItem={handlePublishItem}
+            onUnpublishItem={handleUnpublishItem}
           />
           </>
         );
@@ -569,6 +594,9 @@ function App() {
             creatorId={history.find(h => h.id === selectedHistoryId)?.user_id}
             onScripturesChange={() => setSavedScriptures(getSavedScriptures())}
             onUpgrade={() => setCurrentScreen('pricing')}
+            onPublishStateChange={(isPublic) => {
+              if (selectedHistoryId) setItemPublic(selectedHistoryId, isPublic);
+            }}
           />
 
         ) : (
@@ -577,6 +605,9 @@ function App() {
             <button onClick={handleGoHome} className="btn-sacred-primary">Go Home</button>
           </div>
         );
+
+      case 'community':
+        return <CommunityLibrary onGoHome={handleGoHome} />;
 
       case 'pricing':
         return (

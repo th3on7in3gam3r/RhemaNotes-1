@@ -2,7 +2,7 @@ import React from 'react';
 import { SermonHistoryItem } from '../types';
 import { Button } from './Button';
 import { PendingSyncBanner } from './PendingSyncBanner';
-import { BookOpen, ChevronRight, Trash2, Clock, BookMarked, Sparkles, Waves, User } from 'lucide-react';
+import { BookOpen, ChevronRight, Trash2, Clock, BookMarked, Sparkles, Waves, User, Globe, Lock } from 'lucide-react';
 import { formatSpeakerLabel } from '../lib/speakerMeta';
 
 interface SermonHistoryProps {
@@ -12,12 +12,16 @@ interface SermonHistoryProps {
   onGoHome: () => void;
   onLoadDemo: () => void;
   activeUserId?: string;
+  onPublishItem?: (id: string) => Promise<void>;
+  onUnpublishItem?: (id: string) => Promise<void>;
 }
 
 export const SermonHistory: React.FC<SermonHistoryProps> = ({
-  history, onSelectSermon, onDeleteItem, onGoHome, onLoadDemo, activeUserId
+  history, onSelectSermon, onDeleteItem, onGoHome, onLoadDemo, activeUserId,
+  onPublishItem, onUnpublishItem,
 }) => {
   const [search, setSearch] = React.useState('');
+  const [busyId, setBusyId] = React.useState<string | null>(null);
   const fmt = (ts: number) =>
     new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(ts));
 
@@ -109,22 +113,61 @@ export const SermonHistory: React.FC<SermonHistoryProps> = ({
                     <span className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md">{item.summary.scriptures.length} Scriptures</span>
                     <span className="mx-2 hidden sm:inline">·</span>
                     <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md">{item.summary.key_points.length} Insights</span>
+                    {item.is_public && (
+                      <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md flex items-center gap-1">
+                        <Globe className="w-3 h-3" />
+                        Published
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center space-x-3 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+              <div className="flex items-center space-x-3 flex-shrink-0">
                 {(activeUserId && item.user_id && item.user_id === activeUserId) && (
-                  <button
-                    onClick={e => {
-                      e.stopPropagation();
-                      if (confirm('Remove this sermon study guide from your library? Your Bible scriptures are never affected.')) onDeleteItem(item.id);
-                    }}
-                    className="p-3 text-indigo-200 hover:text-rose-600 hover:bg-rose-50 transition-all rounded-xl"
-                    title="Remove my sermon from library"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={async e => {
+                        e.stopPropagation();
+                        if (item.is_public) {
+                          if (!onUnpublishItem) return;
+                          setBusyId(item.id);
+                          try { await onUnpublishItem(item.id); }
+                          catch (err) { alert(err instanceof Error ? err.message : 'Could not unpublish.'); }
+                          finally { setBusyId(null); }
+                          return;
+                        }
+                        const ok = window.confirm(
+                          'Publish this Summary to the Community Library?\n\nOnly the Summary will be shared. Prayer, reflection questions, and your personal notes stay private.',
+                        );
+                        if (!ok || !onPublishItem) return;
+                        setBusyId(item.id);
+                        try { await onPublishItem(item.id); }
+                        catch (err) { alert(err instanceof Error ? err.message : 'Could not publish.'); }
+                        finally { setBusyId(null); }
+                      }}
+                      disabled={busyId === item.id}
+                      className={`p-3 rounded-xl transition-all ${
+                        item.is_public
+                          ? 'text-emerald-600 hover:bg-emerald-50'
+                          : 'text-indigo-300 hover:text-emerald-700 hover:bg-emerald-50'
+                      } ${busyId === item.id ? 'opacity-50' : ''}`}
+                      title={item.is_public ? 'Unpublish from Community Library' : 'Publish Summary to Community Library'}
+                    >
+                      {item.is_public ? <Globe className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+                    </button>
+                    <button
+                      onClick={e => {
+                        e.stopPropagation();
+                        if (confirm('Remove this sermon study guide from your library? Your Bible scriptures are never affected.')) onDeleteItem(item.id);
+                      }}
+                      className="p-3 text-indigo-200 hover:text-rose-600 hover:bg-rose-50 transition-all rounded-xl"
+                      title="Remove my sermon from library"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </>
                 )}
                 <div className="w-10 h-10 rounded-full border border-indigo-50 flex items-center justify-center group-hover:border-amber-200 transition-colors">
                    <ChevronRight className="w-5 h-5 text-indigo-200 group-hover:text-amber-500 group-hover:translate-x-0.5 transition-all" />
