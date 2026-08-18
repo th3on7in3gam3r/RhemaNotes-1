@@ -1,0 +1,77 @@
+# RhemaNotes
+
+Instant sermon summaries and study tools — record, upload, paste, or link a sermon and get transcripts, scripture links, flashcards, quizzes, and reflections.
+
+## Run locally
+
+**Prerequisites:** Node.js 18+
+
+1. `npm install`
+2. Copy `.env.local` and set:
+   - `GEMINI_API_KEY` — [Google AI Studio](https://aistudio.google.com/)
+   - `VITE_CLERK_PUBLISHABLE_KEY` — Clerk dashboard
+   - Optional: `VITE_GEMINI_MODEL` (default `gemini-2.5-flash`)
+3. `npm run dev` → http://localhost:3000
+
+Vite proxies `/v1beta` to Google with your local `GEMINI_API_KEY`.
+
+## Smoke test Gemini
+
+```bash
+npm run test:gemini
+```
+
+## Deploy checklist (Cloudflare Workers)
+
+1. **Build:** `npm run build`
+2. **Secrets** (Cloudflare dashboard → Workers → Settings → Variables):
+   - `GEMINI_API_KEY` — Google AI (all users share this quota)
+   - `CLERK_SECRET_KEY` — **Required** so signed-in users are verified; paid tier (`pro` / `church`) is read from D1 for everyone
+   - `CLERK_PUBLISHABLE_KEY` — Clerk `pk_live_…` / `pk_test_…` (injected into HTML at runtime so sign-in works even when the Vite build omits it)
+   - `STRIPE_SECRET_KEY`
+   - `STRIPE_WEBHOOK_SECRET`
+   - `FOUNDER_EMAILS` — optional comma-separated sign-in emails granted **The Harvest** (project owners; not in git)
+   - `FOUNDER_CLERK_IDS` — optional comma-separated Clerk `user_…` IDs (same effect; use Profile → ID line)
+   - `WHISPER_API_KEY` — [whisper-api.com](https://whisper-api.com) for long audio transcription (sign-in required; falls back to Gemini chunks if unset)
+
+   **Build variables** (same dashboard → Build, or local `.env.local` for `npm run build`):
+   - `VITE_CLERK_PUBLISHABLE_KEY` — optional at build time; if missing, set `CLERK_PUBLISHABLE_KEY` on the Worker instead
+3. **Deploy:** `npx wrangler deploy`
+4. **D1:** If the database predates Live Recording, apply migration 001:
+   ```bash
+   npx wrangler d1 execute rhemanotes-db --remote --file=./database/migrations/001_add_live_source_type.sql
+   ```
+   See [database/migrations/README.md](database/migrations/README.md).
+5. **Smoke test production:**
+   - Home loads
+   - Sign in (Clerk)
+   - Short live recording → Complete Scribing → review transcript → study guide
+   - History syncs when signed in
+
+## Long sermons (two paths)
+
+**Path A — recommended (45+ min):** Record in **Voice Memos** (iPhone) or Google Recorder (Android) → copy transcript → **Paste Text** in RhemaNotes.
+
+**Path B — in-app:** **Record in RhemaNotes** or **Transcribe Audio File**. When `WHISPER_API_KEY` is set on the Worker, audio is sent to Whisper first; you review & edit text, then build the study guide. Very long in-browser recordings may still fail on some phones — use Path A if that happens.
+
+Local Worker dev: copy `.dev.vars.example` → `.dev.vars` and set `WHISPER_API_KEY`.
+
+## Live recording flow
+
+1. **Record** — voice memo style (Whisper transcription when configured)
+2. **Complete Scribing** — audio → editable transcript
+3. **Review transcript** — confirm before study guide
+4. **Study guide** — scriptures, quiz, flashcards, mind map from text
+
+## Project layout
+
+| Path | Purpose |
+|------|---------|
+| `App.tsx` | Routing & screens |
+| `hooks/useSermonProcessing.ts` | Transcribe → review → study guide pipeline |
+| `services/geminiService.ts` | Gemini API (proxy, retry, chunking); Whisper-first transcribe |
+| `services/whisperTranscriptionService.ts` | Client upload + poll via Worker |
+| `worker/whisperTranscribe.ts` | Whisper API submit + status |
+| `worker/seo-worker.ts` | Cloudflare worker: assets, API, Gemini proxy |
+| `worker/auth.ts` | Clerk JWT verification |
+| `constants/ai.ts` | Model name & limits |

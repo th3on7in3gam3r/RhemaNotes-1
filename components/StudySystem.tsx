@@ -1,0 +1,139 @@
+import React, { useState } from 'react';
+import { SermonSummaryOutput, MindMapNode } from '../types';
+import { Quiz } from './Quiz';
+import { Flashcards } from './Flashcards';
+import { MindMap } from './MindMap';
+import { SermonChat } from './SermonChat';
+import { HelpCircle, Layers, Network, MessageSquare, AlertCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+
+interface StudySystemProps {
+  summary: SermonSummaryOutput;
+  onUpdateSummary: (updated: SermonSummaryOutput) => void;
+}
+
+type StudyTool = 'quiz' | 'flashcards' | 'mindmap' | 'chat';
+
+const TOOLS: { id: StudyTool; label: string; icon: React.ElementType; accent: string; activeBg: string; activeBorder: string; activeText: string; activeIcon: string }[] = [
+  { id: 'quiz',       label: 'Quiz',       icon: HelpCircle,    accent: 'blue',   activeBg: 'bg-blue-50 dark:bg-blue-950/60',    activeBorder: 'border-blue-500',   activeText: 'text-blue-900 dark:text-blue-200',   activeIcon: 'bg-blue-600 text-white' },
+  { id: 'flashcards', label: 'Flashcards', icon: Layers,        accent: 'indigo', activeBg: 'bg-indigo-50 dark:bg-indigo-950/60', activeBorder: 'border-indigo-500', activeText: 'text-indigo-900 dark:text-indigo-200', activeIcon: 'bg-indigo-600 text-white' },
+  { id: 'mindmap',    label: 'Mind Map',   icon: Network,       accent: 'violet', activeBg: 'bg-violet-50 dark:bg-violet-950/60', activeBorder: 'border-violet-500', activeText: 'text-violet-900 dark:text-violet-200', activeIcon: 'bg-violet-600 text-white' },
+  { id: 'chat',       label: 'Chat',       icon: MessageSquare, accent: 'emerald',activeBg: 'bg-emerald-50 dark:bg-emerald-950/60',activeBorder: 'border-emerald-500',activeText: 'text-emerald-900 dark:text-emerald-200',activeIcon: 'bg-emerald-600 text-white' },
+];
+
+function buildDynamicMindMap(summary: SermonSummaryOutput): MindMapNode {
+  const rootNode: MindMapNode = {
+    id: 'root',
+    label: summary.main_topic || summary.title || 'Sermon',
+    type: 'root',
+    children: []
+  };
+
+  if (summary.key_points && summary.key_points.length > 0) {
+    rootNode.children = summary.key_points.map((point, index) => {
+      const mainNode: MindMapNode = {
+        id: `main-${index}`,
+        label: point,
+        type: 'main',
+        children: []
+      };
+
+      // Add a practical application if available
+      const app = summary.applications?.[index];
+      if (app) {
+        mainNode.children?.push({
+          id: `sub-app-${index}`,
+          label: app,
+          type: 'sub'
+        });
+      }
+
+      // Add a scripture reference if available
+      const scripture = summary.scriptures?.[index];
+      if (scripture) {
+        mainNode.children?.push({
+          id: `sub-scripture-${index}`,
+          label: scripture.reference,
+          type: 'sub'
+        });
+      }
+
+      return mainNode;
+    });
+  }
+
+  return rootNode;
+}
+
+export const StudySystem: React.FC<StudySystemProps> = ({ summary, onUpdateSummary }) => {
+  const [activeTool, setActiveTool] = useState<StudyTool>('quiz');
+
+  const renderTool = () => {
+    switch (activeTool) {
+      case 'quiz':       return summary.quiz?.length       ? <Quiz questions={summary.quiz} />         : <NoData tool="Quiz" />;
+      case 'flashcards': return summary.flashcards?.length ? <Flashcards cards={summary.flashcards} /> : <NoData tool="Flashcards" />;
+      case 'mindmap':    {
+        const mindMapData = summary.mind_map || buildDynamicMindMap(summary);
+        return mindMapData.children?.length ? <MindMap data={mindMapData} /> : <NoData tool="Mind Map" />;
+      }
+      case 'chat':       return <SermonChat summary={summary} onUpdateSummary={onUpdateSummary} />;
+      default:           return null;
+    }
+  };
+
+  return (
+    <div className="p-4 md:p-6 space-y-6 w-full overflow-hidden">
+      {/* Tool selector */}
+      <div className="flex flex-wrap gap-3 w-full">
+        {TOOLS.map(tool => {
+          const active = activeTool === tool.id;
+          const Icon = tool.icon;
+          return (
+            <button
+              key={tool.id}
+              onClick={() => setActiveTool(tool.id)}
+              className={`
+                flex-1 min-w-[110px] sm:min-w-[140px] flex flex-col items-center justify-center p-4 rounded-2xl border-2
+                transition-all duration-200
+                ${active
+                  ? `${tool.activeBg} ${tool.activeBorder} shadow-soft scale-[1.02]`
+                  : 'bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:-translate-y-0.5'
+                }
+              `}
+            >
+              <div className={`w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center mb-2 md:mb-3 transition-colors ${active ? tool.activeIcon : 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500'}`}>
+                <Icon className="w-4 h-4 md:w-5 md:h-5" />
+              </div>
+              <span className={`text-xs md:text-sm font-bold ${active ? tool.activeText : 'text-slate-500 dark:text-slate-400'}`}>
+                {tool.label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Tool content */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={activeTool}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.18 }}
+        >
+          {renderTool()}
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  );
+};
+
+const NoData: React.FC<{ tool: string }> = ({ tool }) => (
+  <div className="flex flex-col items-center justify-center py-16 bg-white dark:bg-slate-800/40 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700">
+    <AlertCircle className="w-10 h-10 text-slate-300 dark:text-slate-600 mb-3" />
+    <p className="font-bold text-slate-400 dark:text-slate-500">No {tool} data</p>
+    <p className="text-sm text-slate-400 dark:text-slate-600 text-center max-w-xs mt-1">
+      This sermon may have been processed before the study system was added.
+    </p>
+  </div>
+);

@@ -1,0 +1,8 @@
+{
+  "name": "SpiritScribe - Instant Sermon Summaries",
+  "description": "Your Faithful Note-Taking App: Turn any sermon audio/video/live speech into clean notes, key points, detected scriptures, action steps, devotional recaps, and shareable content, all automatically.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": []
+}
